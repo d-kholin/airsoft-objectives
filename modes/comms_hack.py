@@ -1,8 +1,13 @@
 import pygame
 import math
 import random
+import json
+import time
+from pathlib import Path
 from game_mode import GameMode, GameState
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
+
+HISTORY_FILE = Path(__file__).parent.parent / "data" / "comms_hack_history.json"
 
 CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 TIMER_PRESETS = [
@@ -104,6 +109,8 @@ class CommsHackMode(GameMode):
             self.input_chars = []
             self.input_char_index = 0
             self.phase = "play"
+            self.play_start_time = time.time()
+            self.failed_attempts = 0
             self.app.sound.play("confirm")
 
     def _handle_play(self, actions):
@@ -143,6 +150,7 @@ class CommsHackMode(GameMode):
                     self.result = "defeat"
                     self.phase = "result"
                     self.pulse_time = 0.0
+                    self._save_history()
                     self.app.sound.play("defeat")
         if self.phase == "decrypting":
             self.decrypt_timer += dt
@@ -156,6 +164,7 @@ class CommsHackMode(GameMode):
                         self.app.sound.play("confirm")
                         break
                 if not matched_any:
+                    self.failed_attempts += 1
                     self.cmd_log.append(f"  >> ACCESS DENIED")
                     self.app.sound.play("error")
                 if len(self.cmd_log) > 4:
@@ -164,6 +173,7 @@ class CommsHackMode(GameMode):
                     self.result = "victory"
                     self.phase = "result"
                     self.pulse_time = 0.0
+                    self._save_history()
                     self.app.sound.play("victory")
                 else:
                     self.phase = "play"
@@ -294,6 +304,35 @@ class CommsHackMode(GameMode):
         prefix = self.font_sm.render("root@comms:~# AUTH ", True, COLORS["green"])
         screen.blit(prefix, (10, cmd_y))
         self._draw_char_input(screen, self.input_chars, self.input_char_index, 10 + prefix.get_width(), cmd_y - 6)
+
+    def _save_history(self):
+        elapsed = time.time() - self.play_start_time
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M"),
+            "result": self.result,
+            "elapsed_seconds": round(elapsed),
+            "failed_attempts": self.failed_attempts,
+            "codes_unlocked": sum(self.matched),
+            "timer_preset": self.timer_total,
+        }
+        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        history = []
+        if HISTORY_FILE.exists():
+            try:
+                history = json.loads(HISTORY_FILE.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        history.append(entry)
+        HISTORY_FILE.write_text(json.dumps(history, indent=2))
+
+    @staticmethod
+    def load_history():
+        if HISTORY_FILE.exists():
+            try:
+                return json.loads(HISTORY_FILE.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        return []
 
     def _draw_char_input(self, screen, chars, char_index, x, y):
         cx = x

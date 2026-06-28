@@ -6,7 +6,7 @@ class Display:
     def __init__(self, width, height, fullscreen=True):
         flags = pygame.FULLSCREEN if fullscreen else 0
         self.screen = pygame.display.set_mode((width, height), flags)
-        pygame.display.set_caption("Raspi-Box")
+        pygame.display.set_caption("Field Ops")
         pygame.mouse.set_visible(False)
         self.width = width
         self.height = height
