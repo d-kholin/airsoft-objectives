@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from game_mode import GameMode, GameState
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
+from ui import draw_menu_item
 
 HISTORY_FILE = Path(__file__).parent.parent / "data" / "comms_hack_history.json"
 
@@ -227,11 +228,10 @@ class CommsHackMode(GameMode):
         screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
 
         for i, (label, _secs) in enumerate(TIMER_PRESETS):
-            selected = i == self.timer_selection
-            color = COLORS["green"] if selected else COLORS["grey"]
-            prefix = "> " if selected else "  "
-            surf = self.font_med.render(f"{prefix}{label}", True, color)
-            screen.blit(surf, (SCREEN_WIDTH // 2 - 100, 120 + i * 50))
+            draw_menu_item(
+                screen, self.font_med, label,
+                i == self.timer_selection, SCREEN_WIDTH // 2 - 100, 120 + i * 50,
+            )
 
         hints = self.font_sm.render(
             "UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"]

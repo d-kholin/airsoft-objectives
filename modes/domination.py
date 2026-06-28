@@ -3,6 +3,7 @@ import math
 import random
 from game_mode import GameMode, GameState
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
+from ui import draw_menu_item
 import json
 import time
 from pathlib import Path
@@ -366,11 +367,10 @@ class DominationMode(GameMode):
         screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=110))
 
         for i, (label, _) in enumerate(GOAL_PRESETS):
-            selected = i == self.goal_selection
-            color = COLORS["green"] if selected else COLORS["grey"]
-            prefix = "> " if selected else "  "
-            surf = self.font_med.render(f"{prefix}{label}", True, color)
-            screen.blit(surf, (SCREEN_WIDTH // 2 - 100, 170 + i * 60))
+            draw_menu_item(
+                screen, self.font_med, label,
+                i == self.goal_selection, SCREEN_WIDTH // 2 - 100, 170 + i * 60,
+            )
 
         hints = self.font_sm.render("UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"])
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))

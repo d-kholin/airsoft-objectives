@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from game_mode import GameMode, GameState
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
+from ui import draw_menu_item
 
 HISTORY_FILE = Path(__file__).parent.parent / "data" / "bomb_defusal_history.json"
 
@@ -692,20 +693,13 @@ class BombDefusalMode(GameMode):
         screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=90))
 
         col_x = [200, 560]
-        box_w = 264
-        box_h = 48
         row_h = 64
         top = 148
         per_col = (len(TIMER_PRESETS) + 1) // 2
         for i, (label, _) in enumerate(TIMER_PRESETS):
             x = col_x[i // per_col]
             y = top + (i % per_col) * row_h
-            selected = i == self.timer_selection
-            if selected:
-                self._draw_selector(screen, y, box_h, x=x, w=box_w)
-            color = COLORS["white"] if selected else COLORS["grey"]
-            surf = self.font_med.render(label, True, color)
-            screen.blit(surf, surf.get_rect(midleft=(x + 22, y + box_h // 2)))
+            draw_menu_item(screen, self.font_med, label, i == self.timer_selection, x, y)
 
         hints = self.font_sm.render("UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"])
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
@@ -735,18 +729,11 @@ class BombDefusalMode(GameMode):
         sub = self.font_sm.render("Set number of modules", True, COLORS["white"])
         screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=90))
 
-        box_w = 300
-        box_h = 48
         row_h = 64
-        x = SCREEN_WIDTH // 2 - box_w // 2
+        x = SCREEN_WIDTH // 2 - 150
         for i, (label, _) in enumerate(MODULE_PRESETS):
             y = 150 + i * row_h
-            selected = i == self.module_selection
-            if selected:
-                self._draw_selector(screen, y, box_h, x=x, w=box_w)
-            color = COLORS["white"] if selected else COLORS["grey"]
-            surf = self.font_med.render(label, True, color)
-            screen.blit(surf, surf.get_rect(midleft=(x + 22, y + box_h // 2)))
+            draw_menu_item(screen, self.font_med, label, i == self.module_selection, x, y)
 
         hints = self.font_sm.render("UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"])
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))

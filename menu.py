@@ -2,6 +2,7 @@ import pygame
 from game_mode import GameMode, GameState
 from registry import discover_modes
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
+from ui import draw_menu_item
 
 
 class MenuMode(GameMode):
@@ -57,11 +58,10 @@ class MenuMode(GameMode):
 
         start_y = 110
         for i, mode_cls in enumerate(self.modes):
-            is_selected = i == self.selected
-            color = COLORS["green"] if is_selected else COLORS["grey"]
-            prefix = "> " if is_selected else "  "
-            surf = self.font_item.render(f"{prefix}{mode_cls.name}", True, color)
-            screen.blit(surf, (60, start_y + i * 60))
+            draw_menu_item(
+                screen, self.font_item, mode_cls.name,
+                i == self.selected, 60, start_y + i * 60,
+            )
 
         desc = self.modes[self.selected].description
         if desc:
