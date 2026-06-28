@@ -87,10 +87,12 @@ class MenuMode(GameMode):
             screen.blit(msg, msg.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)))
             return
 
-        header = self.font_hist.render(
-            f"{'DATE':<18}{'RESULT':<12}{'TIME':>6}  {'FAILED':>6}  {'CODES':>5}",
-            True, COLORS["green"],
-        )
+        is_bomb = self.history_data and "strikes" in self.history_data[0]
+        if is_bomb:
+            header_text = f"{'DATE':<18}{'RESULT':<12}{'TIME':>6}  {'STRIKES':>7}  {'MODULES':>7}"
+        else:
+            header_text = f"{'DATE':<18}{'RESULT':<12}{'TIME':>6}  {'FAILED':>6}  {'CODES':>5}"
+        header = self.font_hist.render(header_text, True, COLORS["green"])
         screen.blit(header, (40, 75))
         pygame.draw.line(screen, COLORS["green"], (40, 100), (SCREEN_WIDTH - 40, 100))
 
@@ -111,7 +113,12 @@ class MenuMode(GameMode):
             screen.blit(date_surf, (40, y))
             result_surf = self.font_hist.render(f"{result:<12}", True, result_color)
             screen.blit(result_surf, (240, y))
-            stats = f"{mins:>2}m{secs:02d}s  {entry.get('failed_attempts', 0):>6}  {entry.get('codes_unlocked', 0):>3}/3"
+            if is_bomb:
+                total = entry.get("modules_total", "?")
+                solved = entry.get("modules_solved", "?")
+                stats = f"{mins:>2}m{secs:02d}s  {entry.get('strikes', 0):>5}/3  {solved:>3}/{total}"
+            else:
+                stats = f"{mins:>2}m{secs:02d}s  {entry.get('failed_attempts', 0):>6}  {entry.get('codes_unlocked', 0):>3}/3"
             stats_surf = self.font_hist.render(stats, True, COLORS["white"])
             screen.blit(stats_surf, (420, y))
 
