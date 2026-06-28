@@ -10,11 +10,18 @@ from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
 HISTORY_FILE = Path(__file__).parent.parent / "data" / "bomb_defusal_history.json"
 
 TIMER_PRESETS = [
-    ("3 MIN", 180),
-    ("5 MIN", 300),
-    ("7 MIN", 420),
+    ("CUSTOM", None),
     ("10 MIN", 600),
     ("15 MIN", 900),
+    ("20 MIN", 1200),
+    ("25 MIN", 1500),
+    ("30 MIN", 1800),
+    ("35 MIN", 2100),
+    ("40 MIN", 2400),
+    ("45 MIN", 2700),
+    ("50 MIN", 3000),
+    ("55 MIN", 3300),
+    ("60 MIN", 3600),
 ]
 
 MODULE_PRESETS = [
@@ -347,6 +354,7 @@ class BombDefusalMode(GameMode):
         self.font_mono = pygame.font.Font(None, 28)
         self.phase = "setup_timer"
         self.timer_selection = 1
+        self.custom_minutes = 10
         self.module_selection = 0
         self.setup_step = "timer"
         self.timer_total = 0
@@ -417,6 +425,8 @@ class BombDefusalMode(GameMode):
     def handle_input(self, actions):
         if self.phase == "setup_timer":
             self._handle_setup_timer(actions)
+        elif self.phase == "setup_custom":
+            self._handle_setup_custom(actions)
         elif self.phase == "setup_modules":
             self._handle_setup_modules(actions)
         elif self.phase == "play":
@@ -431,7 +441,23 @@ class BombDefusalMode(GameMode):
         if "DOWN" in actions:
             self.timer_selection = (self.timer_selection + 1) % len(TIMER_PRESETS)
         if "START" in actions or "GREEN_BUTTON" in actions:
-            self.timer_total = TIMER_PRESETS[self.timer_selection][1]
+            preset = TIMER_PRESETS[self.timer_selection][1]
+            if preset is None:
+                self.phase = "setup_custom"
+            else:
+                self.timer_total = preset
+                self.timer_remaining = self.timer_total
+                self.phase = "setup_modules"
+
+    def _handle_setup_custom(self, actions):
+        if "UP" in actions:
+            self.custom_minutes = min(99, self.custom_minutes + 1)
+        if "DOWN" in actions:
+            self.custom_minutes = max(1, self.custom_minutes - 1)
+        if "RED_BUTTON" in actions:
+            self.phase = "setup_timer"
+        if "START" in actions or "GREEN_BUTTON" in actions:
+            self.timer_total = self.custom_minutes * 60
             self.timer_remaining = self.timer_total
             self.phase = "setup_modules"
 
@@ -649,6 +675,8 @@ class BombDefusalMode(GameMode):
     def draw(self, screen):
         if self.phase == "setup_timer":
             self._draw_setup_timer(screen)
+        elif self.phase == "setup_custom":
+            self._draw_setup_custom(screen)
         elif self.phase == "setup_modules":
             self._draw_setup_modules(screen)
         elif self.phase == "play":
@@ -663,14 +691,41 @@ class BombDefusalMode(GameMode):
         sub = self.font_sm.render("Set countdown timer", True, COLORS["white"])
         screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=90))
 
+        col_x = [200, 560]
+        box_w = 264
+        box_h = 48
+        row_h = 64
+        top = 148
+        per_col = (len(TIMER_PRESETS) + 1) // 2
         for i, (label, _) in enumerate(TIMER_PRESETS):
+            x = col_x[i // per_col]
+            y = top + (i % per_col) * row_h
             selected = i == self.timer_selection
-            color = COLORS["green"] if selected else COLORS["grey"]
-            prefix = "> " if selected else "  "
-            surf = self.font_med.render(f"{prefix}{label}", True, color)
-            screen.blit(surf, (SCREEN_WIDTH // 2 - 100, 140 + i * 50))
+            if selected:
+                self._draw_selector(screen, y, box_h, x=x, w=box_w)
+            color = COLORS["white"] if selected else COLORS["grey"]
+            surf = self.font_med.render(label, True, color)
+            screen.blit(surf, surf.get_rect(midleft=(x + 22, y + box_h // 2)))
 
         hints = self.font_sm.render("UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"])
+        screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
+
+    def _draw_setup_custom(self, screen):
+        title = self.font_big.render("BOMB DEFUSAL SETUP", True, COLORS["yellow"])
+        screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
+
+        sub = self.font_sm.render("Set custom time", True, COLORS["white"])
+        screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=110))
+
+        val = self.font_big.render(f"{self.custom_minutes:02d}:00", True, COLORS["green"])
+        screen.blit(val, val.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 10)))
+
+        label = self.font_sm.render("MINUTES", True, COLORS["grey"])
+        screen.blit(label, label.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT // 2 + 50))
+
+        hints = self.font_sm.render(
+            "UP/DOWN=adjust  START/GREEN=confirm  RED=back", True, COLORS["grey"]
+        )
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_setup_modules(self, screen):
@@ -680,12 +735,18 @@ class BombDefusalMode(GameMode):
         sub = self.font_sm.render("Set number of modules", True, COLORS["white"])
         screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=90))
 
+        box_w = 300
+        box_h = 48
+        row_h = 64
+        x = SCREEN_WIDTH // 2 - box_w // 2
         for i, (label, _) in enumerate(MODULE_PRESETS):
+            y = 150 + i * row_h
             selected = i == self.module_selection
-            color = COLORS["green"] if selected else COLORS["grey"]
-            prefix = "> " if selected else "  "
-            surf = self.font_med.render(f"{prefix}{label}", True, color)
-            screen.blit(surf, (SCREEN_WIDTH // 2 - 120, 140 + i * 50))
+            if selected:
+                self._draw_selector(screen, y, box_h, x=x, w=box_w)
+            color = COLORS["white"] if selected else COLORS["grey"]
+            surf = self.font_med.render(label, True, color)
+            screen.blit(surf, surf.get_rect(midleft=(x + 22, y + box_h // 2)))
 
         hints = self.font_sm.render("UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"])
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
