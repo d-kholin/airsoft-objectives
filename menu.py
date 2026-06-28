@@ -88,8 +88,11 @@ class MenuMode(GameMode):
             return
 
         is_bomb = self.history_data and "strikes" in self.history_data[0]
+        is_dom = self.history_data and "red_hold_time" in self.history_data[0]
         if is_bomb:
             header_text = f"{'DATE':<18}{'RESULT':<12}{'TIME':>6}  {'STRIKES':>7}  {'MODULES':>7}"
+        elif is_dom:
+            header_text = f"{'DATE':<18}{'WINNER':<12}{'TIME':>6}  {'RED':>6}  {'BLUE':>6}"
         else:
             header_text = f"{'DATE':<18}{'RESULT':<12}{'TIME':>6}  {'FAILED':>6}  {'CODES':>5}"
         header = self.font_hist.render(header_text, True, COLORS["green"])
@@ -108,7 +111,10 @@ class MenuMode(GameMode):
             mins = elapsed // 60
             secs = elapsed % 60
             result = entry.get("result", "?").upper()
-            result_color = COLORS["green"] if result == "VICTORY" else COLORS["red"]
+            if is_dom:
+                result_color = (255, 40, 40) if result == "RED" else (40, 100, 255)
+            else:
+                result_color = COLORS["green"] if result == "VICTORY" else COLORS["red"]
             date_surf = self.font_hist.render(f"{entry.get('timestamp', '?'):<18}", True, COLORS["white"])
             screen.blit(date_surf, (40, y))
             result_surf = self.font_hist.render(f"{result:<12}", True, result_color)
@@ -117,6 +123,10 @@ class MenuMode(GameMode):
                 total = entry.get("modules_total", "?")
                 solved = entry.get("modules_solved", "?")
                 stats = f"{mins:>2}m{secs:02d}s  {entry.get('strikes', 0):>5}/3  {solved:>3}/{total}"
+            elif is_dom:
+                rt = entry.get("red_hold_time", 0)
+                bt = entry.get("blue_hold_time", 0)
+                stats = f"{mins:>2}m{secs:02d}s  {rt//60}:{rt%60:02d}  {bt//60}:{bt%60:02d}"
             else:
                 stats = f"{mins:>2}m{secs:02d}s  {entry.get('failed_attempts', 0):>6}  {entry.get('codes_unlocked', 0):>3}/3"
             stats_surf = self.font_hist.render(stats, True, COLORS["white"])
