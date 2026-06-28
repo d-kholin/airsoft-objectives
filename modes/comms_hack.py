@@ -204,11 +204,7 @@ class CommsHackMode(GameMode):
             )
             screen.blit(surf, (60, 130 + i * 35))
 
-        current = "".join(self.current_code)
-        editing_char = CHARSET[self.char_index]
-        display = f"> {current}[{editing_char}]"
-        surf = self.font_med.render(display, True, COLORS["white"])
-        screen.blit(surf, (60, 250))
+        self._draw_char_input(screen, self.current_code, self.char_index, 60, 250)
 
         hints = self.font_sm.render(
             "UP/DOWN=scroll  GREEN=add char  RED=delete  START=confirm code",
@@ -295,13 +291,32 @@ class CommsHackMode(GameMode):
         cmd_y = SCREEN_HEIGHT - 42
         pygame.draw.line(screen, DIM_GREEN, (0, cmd_y - 5), (SCREEN_WIDTH, cmd_y - 5))
 
-        current = "".join(self.input_chars)
-        editing_char = CHARSET[self.input_char_index]
-        cursor_visible = int(self.cursor_blink * 3) % 2 == 0
-        cursor = editing_char if cursor_visible else " "
-        prompt_text = f"root@comms:~# AUTH {current}{cursor}"
-        prompt_surf = self.font_sm.render(prompt_text, True, COLORS["green"])
-        screen.blit(prompt_surf, (10, cmd_y))
+        prefix = self.font_sm.render("root@comms:~# AUTH ", True, COLORS["green"])
+        screen.blit(prefix, (10, cmd_y))
+        self._draw_char_input(screen, self.input_chars, self.input_char_index, 10 + prefix.get_width(), cmd_y - 6)
+
+    def _draw_char_input(self, screen, chars, char_index, x, y):
+        cx = x
+        char_h = self.font_med.get_height()
+        if chars:
+            confirmed = self.font_med.render("".join(chars), True, COLORS["green"])
+            screen.blit(confirmed, (cx, y))
+            cx += confirmed.get_width() + 4
+
+        prev_char = CHARSET[(char_index - 1) % len(CHARSET)]
+        curr_char = CHARSET[char_index]
+        next_char = CHARSET[(char_index + 1) % len(CHARSET)]
+
+        selector_bg = pygame.Rect(cx, y, 30, char_h)
+        pygame.draw.rect(screen, COLORS["yellow"], selector_bg)
+        curr_surf = self.font_med.render(curr_char, True, COLORS["bg"])
+        screen.blit(curr_surf, curr_surf.get_rect(center=selector_bg.center))
+
+        prev_surf = self.font_sm.render(prev_char, True, COLORS["grey"])
+        screen.blit(prev_surf, prev_surf.get_rect(centerx=selector_bg.centerx, bottom=selector_bg.top - 4))
+
+        next_surf = self.font_sm.render(next_char, True, COLORS["grey"])
+        screen.blit(next_surf, next_surf.get_rect(centerx=selector_bg.centerx, top=selector_bg.bottom + 4))
 
     def _draw_decrypt_overlay(self, screen):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
