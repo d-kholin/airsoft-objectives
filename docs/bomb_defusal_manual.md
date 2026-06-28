@@ -43,15 +43,15 @@ The defuser will see 4 symbols on the screen. They must read out all four symbol
 
 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5 | Column 6 |
 |----------|----------|----------|----------|----------|----------|
-| BOLT     | MOON     | GEAR     | STAR     | DART     | COIL     |
-| STAR     | BOLT     | WAVE     | KNOT     | MOON     | GEAR     |
-| DROP     | RING     | KNOT     | FANG     | COIL     | MOON     |
-| GEAR     | WAVE     | DART     | RING     | APEX     | FANG     |
-| KNOT     | STAR     | MOON     | GEAR     | DROP     | BOLT     |
-| RING     | COIL     | DROP     | APEX     | FANG     | WAVE     |
-| DART     | FANG     | APEX     | COIL     | BOLT     | KNOT     |
+| NOVA     | RING     | PYRE     | TIDE     | GRID     | FANG     |
+| SAGE     | HALO     | DART     | GRID     | PYRE     | WAVE     |
+| BOLT     | COIL     | FANG     | STAR     | COIL     | TIDE     |
+| APEX     | STAR     | QUAD     | REEF     | KNOT     | HALO     |
+| QUAD     | GRID     | STAR     | PYRE     | QUAD     | NOVA     |
+| DROP     | FANG     | APEX     | WISP     | GEAR     | WISP     |
+| GEAR     | REEF     | NOVA     | APEX     | NOVA     | KNOT     |
 
-**Example:** If the defuser says "WAVE, DART, GEAR, KNOT", find Column 3 (which contains all four). The correct press order is: GEAR → WAVE → KNOT → DART.
+**Example:** If the defuser says "GEAR, BOLT, QUAD, NOVA", find Column 1 (the only column containing all four). The correct press order is the order they appear top-to-bottom in that column: NOVA → BOLT → QUAD → GEAR.
 
 ---
 

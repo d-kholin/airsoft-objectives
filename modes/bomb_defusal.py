@@ -33,13 +33,16 @@ WIRE_RGB = {
     "GREEN": (0, 200, 80),
 }
 
+# Columns are designed so every pair shares at most 3 symbols. This guarantees
+# any 4-symbol puzzle drawn from one column maps to exactly one column (no
+# ambiguity for the manual). See scratchpad/gen_keypad.py for the search.
 KEYPAD_COLUMNS = [
-    ["BOLT", "STAR", "DROP", "GEAR", "KNOT", "RING", "DART"],
-    ["MOON", "BOLT", "RING", "WAVE", "STAR", "COIL", "FANG"],
-    ["GEAR", "WAVE", "KNOT", "DART", "MOON", "DROP", "APEX"],
-    ["STAR", "KNOT", "FANG", "RING", "GEAR", "APEX", "COIL"],
-    ["DART", "MOON", "COIL", "APEX", "DROP", "FANG", "BOLT"],
-    ["COIL", "GEAR", "MOON", "FANG", "BOLT", "WAVE", "KNOT"],
+    ["NOVA", "SAGE", "BOLT", "APEX", "QUAD", "DROP", "GEAR"],
+    ["RING", "HALO", "COIL", "STAR", "GRID", "FANG", "REEF"],
+    ["PYRE", "DART", "FANG", "QUAD", "STAR", "APEX", "NOVA"],
+    ["TIDE", "GRID", "STAR", "REEF", "PYRE", "WISP", "APEX"],
+    ["GRID", "PYRE", "COIL", "KNOT", "QUAD", "GEAR", "NOVA"],
+    ["FANG", "WAVE", "TIDE", "HALO", "NOVA", "WISP", "KNOT"],
 ]
 
 BUTTON_COLORS = ["RED", "BLUE", "YELLOW", "WHITE"]
@@ -540,11 +543,18 @@ class BombDefusalMode(GameMode):
                     mod["phase"] = "waiting"
                     self._strike()
 
+    def _skip_discharged_caps(self, mod, direction):
+        n = len(mod["capacitors"])
+        for _ in range(n):
+            mod["selected"] = (mod["selected"] + direction) % n
+            if not mod["capacitors"][mod["selected"]]["discharged"]:
+                return
+
     def _handle_capacitor(self, mod, actions):
         if "UP" in actions:
-            mod["selected"] = (mod["selected"] - 1) % len(mod["capacitors"])
+            self._skip_discharged_caps(mod, -1)
         if "DOWN" in actions:
-            mod["selected"] = (mod["selected"] + 1) % len(mod["capacitors"])
+            self._skip_discharged_caps(mod, 1)
         if "GREEN_BUTTON" in actions or "START" in actions:
             cap = mod["capacitors"][mod["selected"]]
             if cap["discharged"]:
@@ -561,11 +571,18 @@ class BombDefusalMode(GameMode):
             else:
                 self._strike()
 
+    def _skip_pulled_pins(self, mod, direction):
+        n = len(mod["pins"])
+        for _ in range(n):
+            mod["selected"] = (mod["selected"] + direction) % n
+            if not mod["pins"][mod["selected"]]["pulled"]:
+                return
+
     def _handle_pins(self, mod, actions):
         if "UP" in actions:
-            mod["selected"] = (mod["selected"] - 1) % len(mod["pins"])
+            self._skip_pulled_pins(mod, -1)
         if "DOWN" in actions:
-            mod["selected"] = (mod["selected"] + 1) % len(mod["pins"])
+            self._skip_pulled_pins(mod, 1)
         if "GREEN_BUTTON" in actions or "START" in actions:
             pin = mod["pins"][mod["selected"]]
             if pin["pulled"]:
