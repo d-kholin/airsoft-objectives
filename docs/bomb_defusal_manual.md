@@ -83,6 +83,107 @@ When the defuser holds the button (press GREEN and keep it held), a **colored st
 
 ---
 
+## MODULE 4: MORSE CODE
+
+The defuser will see a flashing light and the morse code pattern displayed as dots and dashes. They must read the **morse code pattern** to you. Decode the word, then look up the correct frequency.
+
+### Morse Alphabet
+
+| A | B | C | D | E | F | G | H | I |
+|---|---|---|---|---|---|---|---|---|
+| .- | -... | -.-. | -.. | . | ..-. | --. | .... | .. |
+
+| J | K | L | M | N | O | P | Q | R |
+|---|---|---|---|---|---|---|---|---|
+| .--- | -.- | .-.. | -- | -. | --- | .--. | --.- | .-. |
+
+| S | T | U | V | W | X | Y | Z |
+|---|---|---|---|---|---|---|---|
+| ... | - | ..- | ...- | .-- | -..- | -.-- | --.. |
+
+### Frequency Table
+
+| Word   | Frequency (MHz) |
+|--------|----------------|
+| SHELL  | 3.505          |
+| HALLS  | 3.515          |
+| SLICK  | 3.522          |
+| TRICK  | 3.532          |
+| BOXES  | 3.535          |
+| LEAKS  | 3.542          |
+| STROBE | 3.545          |
+| BISTRO | 3.552          |
+| FLICK  | 3.555          |
+| BOMBS  | 3.565          |
+| BREAK  | 3.572          |
+| BRICK  | 3.575          |
+| STEAK  | 3.582          |
+| STING  | 3.592          |
+| VECTOR | 3.595          |
+| BEATS  | 3.600          |
+
+Tell the defuser the correct frequency. They will tune to it using UP/DOWN and submit with GREEN.
+
+---
+
+## MODULE 5: SIMON SAYS
+
+The defuser will see four colored lights (RED, BLUE, GREEN, YELLOW) that flash in a sequence. The defuser must repeat the sequence — but with **remapped colors** based on the current number of strikes and whether the **serial number contains a vowel**.
+
+The defuser's buttons for colors are:
+- **UP** = RED
+- **START** = BLUE
+- **DOWN** = GREEN
+- **GREEN button** = YELLOW
+
+### If the serial number DOES NOT contain a vowel (A, E, I, O, U):
+
+| Strikes | Flashes RED → Press | Flashes BLUE → Press | Flashes GREEN → Press | Flashes YELLOW → Press |
+|---------|--------------------|--------------------|---------------------|----------------------|
+| 0       | BLUE               | RED                | YELLOW              | GREEN                |
+| 1       | YELLOW             | GREEN              | BLUE                | RED                  |
+| 2       | GREEN              | YELLOW             | RED                 | BLUE                 |
+
+### If the serial number DOES contain a vowel:
+
+| Strikes | Flashes RED → Press | Flashes BLUE → Press | Flashes GREEN → Press | Flashes YELLOW → Press |
+|---------|--------------------|--------------------|---------------------|----------------------|
+| 0       | BLUE               | YELLOW             | GREEN               | RED                  |
+| 1       | GREEN              | BLUE               | RED                 | YELLOW               |
+| 2       | YELLOW             | RED                | BLUE                | GREEN                |
+
+The module has multiple stages. In stage 1, one color flashes. In stage 2, two colors flash (the original plus one more), and so on. Each stage, you must enter the **entire sequence from the beginning** using the mapping for your **current** strike count.
+
+---
+
+## MODULE 6: NUMBER PAD
+
+The defuser will see a **display showing a number (1–4)** and a set of **indicator lights** (labeled SIG, FRK, CAR, IND, MSA, BOB — some lit, some unlit). They must tell you: the **display number** and **which indicators are lit**.
+
+Based on these, tell the defuser which number to select:
+
+### Display shows 1:
+- If **FRK** is lit and the **last digit of the serial is odd** → select **3**
+- Otherwise, if **CAR** is lit → select **4**
+- Otherwise → select **2**
+
+### Display shows 2:
+- If **SIG** and **FRK** are both lit → select **4**
+- Otherwise, if the **last digit of the serial is odd** → select **1**
+- Otherwise → select **3**
+
+### Display shows 3:
+- If **CAR** is lit and the **last digit of the serial is even** → select **1**
+- Otherwise, if **SIG** is lit → select **2**
+- Otherwise → select **4**
+
+### Display shows 4:
+- If **FRK** and **CAR** are both lit → select **2**
+- Otherwise, if **SIG** is lit and the **last digit of the serial is odd** → select **3**
+- Otherwise → select **1**
+
+---
+
 ## GENERAL TIPS
 
 - The defuser navigates between modules using RED (previous) and BLUE (next).
