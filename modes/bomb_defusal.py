@@ -45,57 +45,19 @@ KEYPAD_COLUMNS = [
 BUTTON_COLORS = ["RED", "BLUE", "YELLOW", "WHITE"]
 BUTTON_LABELS = ["ABORT", "DETONATE", "HOLD", "PRESS", "DISARM"]
 
-MORSE_WORDS = {
-    "SHELL": 3.505,
-    "HALLS": 3.515,
-    "SLICK": 3.522,
-    "TRICK": 3.532,
-    "BOXES": 3.535,
-    "LEAKS": 3.542,
-    "STROBE": 3.545,
-    "BISTRO": 3.552,
-    "FLICK": 3.555,
-    "BOMBS": 3.565,
-    "BREAK": 3.572,
-    "BRICK": 3.575,
-    "STEAK": 3.582,
-    "STING": 3.592,
-    "VECTOR": 3.595,
-    "BEATS": 3.600,
-}
-
-MORSE_CODE = {
-    "A": ".-", "B": "-...", "C": "-.-.", "D": "-..", "E": ".",
-    "F": "..-.", "G": "--.", "H": "....", "I": "..", "J": ".---",
-    "K": "-.-", "L": ".-..", "M": "--", "N": "-.", "O": "---",
-    "P": ".--.", "Q": "--.-", "R": ".-.", "S": "...", "T": "-",
-    "U": "..-", "V": "...-", "W": ".--", "X": "-..-", "Y": "-.--",
-    "Z": "--..",
-}
-
-SIMON_COLORS = ["RED", "BLUE", "GREEN", "YELLOW"]
-SIMON_RGB = {
+CAP_COLORS = ["RED", "BLUE", "GREEN", "YELLOW"]
+CAP_COLOR_RGB = {
     "RED": (255, 40, 40),
     "BLUE": (40, 100, 255),
     "GREEN": (0, 200, 80),
     "YELLOW": (255, 220, 0),
 }
-SIMON_DIM_RGB = {
-    "RED": (80, 15, 15),
-    "BLUE": (15, 35, 80),
-    "GREEN": (0, 60, 25),
-    "YELLOW": (80, 70, 0),
-}
 
-SIMON_MAP_NO_VOWEL = {
-    0: {"RED": "BLUE", "BLUE": "RED", "GREEN": "YELLOW", "YELLOW": "GREEN"},
-    1: {"RED": "YELLOW", "BLUE": "GREEN", "GREEN": "BLUE", "YELLOW": "RED"},
-    2: {"RED": "GREEN", "BLUE": "YELLOW", "GREEN": "RED", "YELLOW": "BLUE"},
-}
-SIMON_MAP_VOWEL = {
-    0: {"RED": "BLUE", "BLUE": "YELLOW", "GREEN": "GREEN", "YELLOW": "RED"},
-    1: {"RED": "GREEN", "BLUE": "BLUE", "GREEN": "RED", "YELLOW": "YELLOW"},
-    2: {"RED": "YELLOW", "BLUE": "RED", "GREEN": "BLUE", "YELLOW": "GREEN"},
+PIN_STATUSES = ["ARMED", "SAFE", "UNKNOWN"]
+PIN_STATUS_COLOR = {
+    "ARMED": (255, 40, 40),
+    "SAFE": (0, 200, 80),
+    "UNKNOWN": (255, 220, 0),
 }
 
 NUMPAD_INDICATORS = ["SIG", "FRK", "CAR", "IND", "MSA", "BOB"]
@@ -225,43 +187,69 @@ def _solve_button_release(module):
     return 1
 
 
-def _generate_morse_module():
-    word = random.choice(list(MORSE_WORDS.keys()))
-    freq = MORSE_WORDS[word]
-    morse = "  ".join(MORSE_CODE[c] for c in word)
+def _generate_capacitor_module():
+    count = random.randint(3, 4)
+    caps = []
+    for i in range(count):
+        color = random.choice(CAP_COLORS)
+        voltage = random.choice([1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0])
+        caps.append({"color": color, "voltage": voltage, "discharged": False})
+    correct = _solve_capacitor_order(caps)
     return {
-        "type": "morse",
-        "word": word,
-        "morse": morse,
-        "frequency": freq,
+        "type": "capacitor",
+        "capacitors": caps,
+        "correct_order": correct,
+        "discharge_step": 0,
         "solved": False,
-        "selected_freq": 3.500,
-        "flash_timer": 0.0,
+        "selected": 0,
     }
 
 
-def _generate_simon_module():
-    length = random.randint(3, 5)
-    sequence = [random.choice(SIMON_COLORS) for _ in range(length)]
+def _solve_capacitor_order(caps):
+    priority = {"RED": 0, "YELLOW": 1, "BLUE": 2, "GREEN": 3}
+    indexed = list(enumerate(caps))
+    indexed.sort(key=lambda ic: (ic[1]["voltage"], priority.get(ic[1]["color"], 9)))
+    return [i for i, _ in indexed]
+
+
+def _generate_pins_module():
+    count = random.randint(4, 5)
+    pins = []
+    statuses = ["ARMED", "ARMED", "SAFE", "UNKNOWN", "UNKNOWN"]
+    random.shuffle(statuses)
+    for i in range(count):
+        pins.append({"number": i + 1, "status": statuses[i], "pulled": False})
     return {
-        "type": "simon",
-        "sequence": sequence,
-        "stage": 1,
+        "type": "pins",
+        "pins": pins,
         "solved": False,
-        "input": [],
-        "flash_index": 0,
-        "flash_timer": 0.0,
-        "phase": "showing",
-        "show_count": 0,
-        "pause_timer": 0.0,
+        "selected": 0,
+        "pull_step": 0,
     }
 
 
-def _solve_simon(sequence, stage, strikes, serial_has_vowel):
-    mapping = SIMON_MAP_VOWEL if serial_has_vowel else SIMON_MAP_NO_VOWEL
-    strike_key = min(strikes, 2)
-    chart = mapping[strike_key]
-    return [chart[c] for c in sequence[:stage]]
+def _solve_pins_order(pins, serial):
+    last_odd = _serial_last_odd(serial)
+    has_vowel = _serial_has_vowel(serial)
+    armed = [p for p in pins if p["status"] == "ARMED"]
+    unknown = [p for p in pins if p["status"] == "UNKNOWN"]
+    safe = [p for p in pins if p["status"] == "SAFE"]
+
+    order = []
+    if last_odd:
+        order.extend(sorted(unknown, key=lambda p: p["number"]))
+        order.extend(sorted(armed, key=lambda p: p["number"], reverse=True))
+        order.extend(sorted(safe, key=lambda p: p["number"]))
+    elif has_vowel:
+        order.extend(sorted(safe, key=lambda p: p["number"]))
+        order.extend(sorted(unknown, key=lambda p: p["number"], reverse=True))
+        order.extend(sorted(armed, key=lambda p: p["number"]))
+    else:
+        order.extend(sorted(armed, key=lambda p: p["number"]))
+        order.extend(sorted(safe, key=lambda p: p["number"]))
+        order.extend(sorted(unknown, key=lambda p: p["number"], reverse=True))
+
+    return [p["number"] for p in order]
 
 
 def _generate_numpad_module():
@@ -387,7 +375,7 @@ class BombDefusalMode(GameMode):
         self.serial = _generate_serial()
         generators = [
             _generate_wires_module, _generate_keypad_module, _generate_button_module,
-            _generate_morse_module, _generate_simon_module, _generate_numpad_module,
+            _generate_capacitor_module, _generate_pins_module, _generate_numpad_module,
         ]
         random.shuffle(generators)
         self.modules = [gen() for gen in generators[:self.num_modules]]
@@ -409,10 +397,10 @@ class BombDefusalMode(GameMode):
             self._handle_keypad(mod, actions)
         elif mod["type"] == "button":
             self._handle_button(mod, actions)
-        elif mod["type"] == "morse":
-            self._handle_morse(mod, actions)
-        elif mod["type"] == "simon":
-            self._handle_simon(mod, actions)
+        elif mod["type"] == "capacitor":
+            self._handle_capacitor(mod, actions)
+        elif mod["type"] == "pins":
+            self._handle_pins(mod, actions)
         elif mod["type"] == "numpad":
             self._handle_numpad(mod, actions)
 
@@ -479,58 +467,46 @@ class BombDefusalMode(GameMode):
                     mod["phase"] = "waiting"
                     self._strike()
 
-    def _handle_morse(self, mod, actions):
+    def _handle_capacitor(self, mod, actions):
         if "UP" in actions:
-            mod["selected_freq"] = round(mod["selected_freq"] + 0.005, 3)
-            if mod["selected_freq"] > 3.600:
-                mod["selected_freq"] = 3.500
+            mod["selected"] = (mod["selected"] - 1) % len(mod["capacitors"])
         if "DOWN" in actions:
-            mod["selected_freq"] = round(mod["selected_freq"] - 0.005, 3)
-            if mod["selected_freq"] < 3.500:
-                mod["selected_freq"] = 3.600
+            mod["selected"] = (mod["selected"] + 1) % len(mod["capacitors"])
         if "GREEN_BUTTON" in actions or "START" in actions:
-            if abs(mod["selected_freq"] - mod["frequency"]) < 0.001:
-                mod["solved"] = True
+            cap = mod["capacitors"][mod["selected"]]
+            if cap["discharged"]:
+                return
+            expected_idx = mod["correct_order"][mod["discharge_step"]]
+            if mod["selected"] == expected_idx:
+                cap["discharged"] = True
+                mod["discharge_step"] += 1
                 self.app.sound.play("confirm")
-                self._check_win()
+                if mod["discharge_step"] == len(mod["capacitors"]):
+                    mod["solved"] = True
+                    self._check_win()
             else:
                 self._strike()
 
-    def _handle_simon(self, mod, actions):
-        if mod["phase"] == "showing":
-            return
-        color_map = {"UP": "RED", "DOWN": "GREEN", "GREEN_BUTTON": "YELLOW", "START": "BLUE"}
-        for action, color in color_map.items():
-            if action in actions:
-                expected = _solve_simon(
-                    mod["sequence"], mod["stage"], self.strikes,
-                    _serial_has_vowel(self.serial),
-                )
-                idx = len(mod["input"])
-                if color == expected[idx]:
-                    mod["input"].append(color)
-                    self.app.sound.play("confirm")
-                    if len(mod["input"]) == len(expected):
-                        if mod["stage"] >= len(mod["sequence"]):
-                            mod["solved"] = True
-                            self._check_win()
-                        else:
-                            mod["stage"] += 1
-                            mod["input"] = []
-                            mod["phase"] = "showing"
-                            mod["flash_index"] = 0
-                            mod["flash_timer"] = 0.0
-                            mod["show_count"] = 0
-                            mod["pause_timer"] = 1.0
-                else:
-                    mod["input"] = []
-                    mod["phase"] = "showing"
-                    mod["flash_index"] = 0
-                    mod["flash_timer"] = 0.0
-                    mod["show_count"] = 0
-                    mod["pause_timer"] = 1.0
-                    self._strike()
-                break
+    def _handle_pins(self, mod, actions):
+        if "UP" in actions:
+            mod["selected"] = (mod["selected"] - 1) % len(mod["pins"])
+        if "DOWN" in actions:
+            mod["selected"] = (mod["selected"] + 1) % len(mod["pins"])
+        if "GREEN_BUTTON" in actions or "START" in actions:
+            pin = mod["pins"][mod["selected"]]
+            if pin["pulled"]:
+                return
+            correct_order = _solve_pins_order(mod["pins"], self.serial)
+            expected_pin_num = correct_order[mod["pull_step"]]
+            if pin["number"] == expected_pin_num:
+                pin["pulled"] = True
+                mod["pull_step"] += 1
+                self.app.sound.play("confirm")
+                if mod["pull_step"] == len(mod["pins"]):
+                    mod["solved"] = True
+                    self._check_win()
+            else:
+                self._strike()
 
     def _handle_numpad(self, mod, actions):
         if "UP" in actions:
@@ -568,26 +544,6 @@ class BombDefusalMode(GameMode):
 
     def update(self, dt):
         if self.phase == "play":
-            for mod in self.modules:
-                if mod["solved"]:
-                    continue
-                if mod["type"] == "morse":
-                    mod["flash_timer"] += dt
-                if mod["type"] == "simon" and mod["phase"] == "showing":
-                    if mod["pause_timer"] > 0:
-                        mod["pause_timer"] -= dt
-                    else:
-                        mod["flash_timer"] += dt
-                        if mod["flash_timer"] >= 0.6:
-                            mod["flash_timer"] = 0.0
-                            mod["flash_index"] += 1
-                            if mod["flash_index"] >= mod["stage"]:
-                                mod["show_count"] += 1
-                                mod["flash_index"] = 0
-                                if mod["show_count"] >= 2:
-                                    mod["phase"] = "input"
-                                else:
-                                    mod["pause_timer"] = 0.5
             self.timer_remaining -= dt
             if self.timer_remaining <= 0:
                 self.timer_remaining = 0
@@ -697,10 +653,10 @@ class BombDefusalMode(GameMode):
             self._draw_keypad_module(screen, mod)
         elif mod["type"] == "button":
             self._draw_button_module(screen, mod)
-        elif mod["type"] == "morse":
-            self._draw_morse_module(screen, mod)
-        elif mod["type"] == "simon":
-            self._draw_simon_module(screen, mod)
+        elif mod["type"] == "capacitor":
+            self._draw_capacitor_module(screen, mod)
+        elif mod["type"] == "pins":
+            self._draw_pins_module(screen, mod)
         elif mod["type"] == "numpad":
             self._draw_numpad_module(screen, mod)
 
@@ -812,104 +768,103 @@ class BombDefusalMode(GameMode):
             )
             screen.blit(action_hint, action_hint.get_rect(centerx=SCREEN_WIDTH // 2, y=400))
 
-    def _draw_morse_module(self, screen, mod):
-        header = self.font_med.render("MORSE CODE", True, COLORS["white"])
+    def _draw_capacitor_module(self, screen, mod):
+        header = self.font_med.render("CAPACITORS", True, COLORS["white"])
         screen.blit(header, (40, 130))
 
-        info = self.font_sm.render("Read the morse code to your team, then set the frequency", True, COLORS["grey"])
+        info = self.font_sm.render(
+            "Discharge capacitors in the correct order", True, COLORS["grey"]
+        )
         screen.blit(info, (40, 170))
 
-        morse_str = mod["morse"]
-        total_len = len(morse_str)
-        if total_len > 0:
-            cycle_time = total_len * 0.3 + 2.0
-            pos = mod["flash_timer"] % cycle_time
-            char_idx = int(pos / 0.3)
-            if char_idx < total_len:
-                current_char = morse_str[char_idx]
-                if current_char == ".":
-                    light_color = COLORS["yellow"]
-                    light_size = 20
-                elif current_char == "-":
-                    light_color = COLORS["yellow"]
-                    light_size = 40
-                else:
-                    light_color = (40, 40, 45)
-                    light_size = 20
+        progress = self.font_sm.render(
+            f"Discharged: {mod['discharge_step']}/{len(mod['capacitors'])}",
+            True, COLORS["white"],
+        )
+        screen.blit(progress, progress.get_rect(right=SCREEN_WIDTH - 40, y=130))
+
+        for i, cap in enumerate(mod["capacitors"]):
+            y = 220 + i * 80
+            is_selected = i == mod["selected"]
+
+            if is_selected:
+                pygame.draw.rect(screen, (40, 40, 50), (35, y - 5, SCREEN_WIDTH - 70, 70))
+
+            cap_color = CAP_COLOR_RGB[cap["color"]]
+            body_rect = pygame.Rect(80, y, 200, 50)
+
+            if cap["discharged"]:
+                pygame.draw.rect(screen, (30, 30, 35), body_rect, border_radius=6)
+                pygame.draw.rect(screen, (60, 60, 65), body_rect, 2, border_radius=6)
+                status_text = "DISCHARGED"
+                status_color = COLORS["grey"]
             else:
-                light_color = (40, 40, 45)
-                light_size = 20
+                pygame.draw.rect(screen, cap_color, body_rect, border_radius=6)
+                pygame.draw.rect(screen, COLORS["white"], body_rect, 2, border_radius=6)
+                status_text = f"{cap['voltage']:.1f}V"
+                status_color = COLORS["white"]
 
-            cx = SCREEN_WIDTH // 2
-            pygame.draw.circle(screen, light_color, (cx, 240), light_size)
-            pygame.draw.circle(screen, COLORS["white"], (cx, 240), light_size, 2)
+            pygame.draw.rect(screen, cap_color if not cap["discharged"] else (60, 60, 65),
+                             (280, y + 15, 30, 20))
+            pygame.draw.rect(screen, cap_color if not cap["discharged"] else (60, 60, 65),
+                             (50, y + 15, 30, 20))
 
-        morse_display = self.font_sm.render(f"Signal: {morse_str}", True, COLORS["yellow"])
-        screen.blit(morse_display, morse_display.get_rect(centerx=SCREEN_WIDTH // 2, y=280))
+            label = self.font_sm.render(
+                f"{cap['color']}  {status_text}", True, status_color
+            )
+            screen.blit(label, (340, y + 12))
 
-        freq_text = f"Frequency: {mod['selected_freq']:.3f} MHz"
-        freq_surf = self.font_big.render(freq_text, True, COLORS["green"])
-        screen.blit(freq_surf, freq_surf.get_rect(centerx=SCREEN_WIDTH // 2, y=340))
+            if is_selected and not cap["discharged"]:
+                cursor = self.font_sm.render(">", True, COLORS["yellow"])
+                screen.blit(cursor, (45, y + 12))
 
-        bar_w = 500
-        bar_x = (SCREEN_WIDTH - bar_w) // 2
-        bar_y = 420
-        pygame.draw.rect(screen, (40, 40, 45), (bar_x, bar_y, bar_w, 20))
-        frac = (mod["selected_freq"] - 3.500) / 0.100
-        marker_x = bar_x + int(frac * bar_w)
-        pygame.draw.rect(screen, COLORS["green"], (marker_x - 3, bar_y - 5, 6, 30))
-
-        range_l = self.font_mono.render("3.500", True, COLORS["grey"])
-        range_r = self.font_mono.render("3.600", True, COLORS["grey"])
-        screen.blit(range_l, (bar_x, bar_y + 25))
-        screen.blit(range_r, (bar_x + bar_w - range_r.get_width(), bar_y + 25))
-
-        hint = self.font_mono.render("UP/DOWN=tune  GREEN=submit", True, COLORS["grey"])
-        screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=470))
-
-    def _draw_simon_module(self, screen, mod):
-        header = self.font_med.render("SIMON SAYS", True, COLORS["white"])
+    def _draw_pins_module(self, screen, mod):
+        header = self.font_med.render("DETONATOR PINS", True, COLORS["white"])
         screen.blit(header, (40, 130))
 
-        stage_text = f"Stage {mod['stage']} of {len(mod['sequence'])}"
-        stage_surf = self.font_sm.render(stage_text, True, COLORS["white"])
-        screen.blit(stage_surf, (40, 170))
+        info = self.font_sm.render(
+            "Pull pins in the correct order to disarm", True, COLORS["grey"]
+        )
+        screen.blit(info, (40, 170))
 
-        positions = {
-            "RED": (SCREEN_WIDTH // 2, 230),
-            "BLUE": (SCREEN_WIDTH // 2 + 120, 310),
-            "GREEN": (SCREEN_WIDTH // 2, 390),
-            "YELLOW": (SCREEN_WIDTH // 2 - 120, 310),
-        }
-        button_labels = {"RED": "UP", "BLUE": "START", "GREEN": "DOWN", "YELLOW": "GREEN"}
+        progress = self.font_sm.render(
+            f"Pulled: {mod['pull_step']}/{len(mod['pins'])}",
+            True, COLORS["white"],
+        )
+        screen.blit(progress, progress.get_rect(right=SCREEN_WIDTH - 40, y=130))
 
-        active_color = None
-        if mod["phase"] == "showing" and mod["pause_timer"] <= 0:
-            if mod["flash_index"] < mod["stage"]:
-                flash_half = mod["flash_timer"] < 0.4
-                if flash_half:
-                    active_color = mod["sequence"][mod["flash_index"]]
+        for i, pin in enumerate(mod["pins"]):
+            y = 220 + i * 65
+            is_selected = i == mod["selected"]
 
-        for color_name, (cx, cy) in positions.items():
-            if color_name == active_color:
-                rgb = SIMON_RGB[color_name]
+            if is_selected:
+                pygame.draw.rect(screen, (40, 40, 50), (35, y - 5, SCREEN_WIDTH - 70, 55))
+
+            if pin["pulled"]:
+                pin_rect = pygame.Rect(80, y + 5, 180, 35)
+                pygame.draw.rect(screen, (30, 30, 35), pin_rect, border_radius=4)
+                pygame.draw.rect(screen, (60, 60, 65), pin_rect, 2, border_radius=4)
+                label = self.font_sm.render(
+                    f"PIN {pin['number']}  PULLED", True, COLORS["grey"]
+                )
             else:
-                rgb = SIMON_DIM_RGB[color_name]
-            pygame.draw.circle(screen, rgb, (cx, cy), 45)
-            pygame.draw.circle(screen, COLORS["white"], (cx, cy), 45, 2)
-            label = self.font_mono.render(color_name, True, COLORS["white"])
-            screen.blit(label, label.get_rect(center=(cx, cy - 8)))
-            btn = self.font_mono.render(f"[{button_labels[color_name]}]", True, COLORS["grey"])
-            screen.blit(btn, btn.get_rect(center=(cx, cy + 12)))
+                status_color = PIN_STATUS_COLOR[pin["status"]]
+                pin_rect = pygame.Rect(80, y + 5, 180, 35)
+                pygame.draw.rect(screen, (20, 20, 25), pin_rect, border_radius=4)
+                pygame.draw.rect(screen, status_color, pin_rect, 2, border_radius=4)
 
-        if mod["phase"] == "showing":
-            status = self.font_sm.render("WATCH THE SEQUENCE...", True, COLORS["yellow"])
-        else:
-            status = self.font_sm.render(
-                f"YOUR TURN — {len(mod['input'])}/{mod['stage']} entered",
-                True, COLORS["green"],
-            )
-        screen.blit(status, status.get_rect(centerx=SCREEN_WIDTH // 2, y=460))
+                ring = pygame.Rect(260, y + 8, 30, 30)
+                pygame.draw.ellipse(screen, status_color, ring, 3)
+
+                label = self.font_sm.render(
+                    f"PIN {pin['number']}  [{pin['status']}]", True, status_color
+                )
+
+            screen.blit(label, (340, y + 10))
+
+            if is_selected and not pin["pulled"]:
+                cursor = self.font_sm.render(">", True, COLORS["yellow"])
+                screen.blit(cursor, (45, y + 10))
 
     def _draw_numpad_module(self, screen, mod):
         header = self.font_med.render("NUMBER PAD", True, COLORS["white"])

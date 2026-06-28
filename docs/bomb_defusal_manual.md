@@ -83,76 +83,51 @@ When the defuser holds the button (press GREEN and keep it held), a **colored st
 
 ---
 
-## MODULE 4: MORSE CODE
+## MODULE 4: CAPACITOR DISCHARGE
 
-The defuser will see a flashing light and the morse code pattern displayed as dots and dashes. They must read the **morse code pattern** to you. Decode the word, then look up the correct frequency.
+The defuser will see 3–4 capacitors, each with a **color** (RED, BLUE, GREEN, or YELLOW) and a **voltage** (1.5V–5.0V). They must describe each capacitor's color and voltage. The capacitors must be discharged in a specific order — one wrong discharge is a strike.
 
-### Morse Alphabet
+### Discharge Order Rules
 
-| A | B | C | D | E | F | G | H | I |
-|---|---|---|---|---|---|---|---|---|
-| .- | -... | -.-. | -.. | . | ..-. | --. | .... | .. |
+Sort the capacitors by **voltage, lowest first**. If two capacitors have the same voltage, break the tie by color priority:
 
-| J | K | L | M | N | O | P | Q | R |
-|---|---|---|---|---|---|---|---|---|
-| .--- | -.- | .-.. | -- | -. | --- | .--. | --.- | .-. |
+| Priority | Color  |
+|----------|--------|
+| 1st      | RED    |
+| 2nd      | YELLOW |
+| 3rd      | BLUE   |
+| 4th      | GREEN  |
 
-| S | T | U | V | W | X | Y | Z |
-|---|---|---|---|---|---|---|---|
-| ... | - | ..- | ...- | .-- | -..- | -.-- | --.. |
+Tell the defuser to discharge them in this order (lowest voltage first, using color priority for ties).
 
-### Frequency Table
-
-| Word   | Frequency (MHz) |
-|--------|----------------|
-| SHELL  | 3.505          |
-| HALLS  | 3.515          |
-| SLICK  | 3.522          |
-| TRICK  | 3.532          |
-| BOXES  | 3.535          |
-| LEAKS  | 3.542          |
-| STROBE | 3.545          |
-| BISTRO | 3.552          |
-| FLICK  | 3.555          |
-| BOMBS  | 3.565          |
-| BREAK  | 3.572          |
-| BRICK  | 3.575          |
-| STEAK  | 3.582          |
-| STING  | 3.592          |
-| VECTOR | 3.595          |
-| BEATS  | 3.600          |
-
-Tell the defuser the correct frequency. They will tune to it using UP/DOWN and submit with GREEN.
+**Example:** If the capacitors are GREEN 3.0V, RED 1.5V, BLUE 3.0V, YELLOW 4.5V — the order is: RED 1.5V → BLUE 3.0V → GREEN 3.0V → YELLOW 4.5V (BLUE before GREEN at 3.0V because BLUE has higher priority).
 
 ---
 
-## MODULE 5: SIMON SAYS
+## MODULE 5: DETONATOR PINS
 
-The defuser will see four colored lights (RED, BLUE, GREEN, YELLOW) that flash in a sequence. The defuser must repeat the sequence — but with **remapped colors** based on the current number of strikes and whether the **serial number contains a vowel**.
+The defuser will see 4–5 numbered pins, each with a status: **ARMED**, **SAFE**, or **UNKNOWN**. They must tell you the **pin numbers and their statuses**, plus the **serial number**. The pins must be pulled in a specific order.
 
-The defuser's buttons for colors are:
-- **UP** = RED
-- **START** = BLUE
-- **DOWN** = GREEN
-- **GREEN button** = YELLOW
+### Pull Order Rules
 
-### If the serial number DOES NOT contain a vowel (A, E, I, O, U):
+The order depends on the **last digit of the serial number** and whether the **serial contains a vowel (A, E, I, O, U)**:
 
-| Strikes | Flashes RED → Press | Flashes BLUE → Press | Flashes GREEN → Press | Flashes YELLOW → Press |
-|---------|--------------------|--------------------|---------------------|----------------------|
-| 0       | BLUE               | RED                | YELLOW              | GREEN                |
-| 1       | YELLOW             | GREEN              | BLUE                | RED                  |
-| 2       | GREEN              | YELLOW             | RED                 | BLUE                 |
+### If the last digit of the serial is ODD:
+1. Pull all **UNKNOWN** pins first (lowest number first)
+2. Then all **ARMED** pins (highest number first)
+3. Then all **SAFE** pins (lowest number first)
 
-### If the serial number DOES contain a vowel:
+### If the last digit is EVEN and the serial CONTAINS a vowel:
+1. Pull all **SAFE** pins first (lowest number first)
+2. Then all **UNKNOWN** pins (highest number first)
+3. Then all **ARMED** pins (lowest number first)
 
-| Strikes | Flashes RED → Press | Flashes BLUE → Press | Flashes GREEN → Press | Flashes YELLOW → Press |
-|---------|--------------------|--------------------|---------------------|----------------------|
-| 0       | BLUE               | YELLOW             | GREEN               | RED                  |
-| 1       | GREEN              | BLUE               | RED                 | YELLOW               |
-| 2       | YELLOW             | RED                | BLUE                | GREEN                |
+### If the last digit is EVEN and the serial DOES NOT contain a vowel:
+1. Pull all **ARMED** pins first (lowest number first)
+2. Then all **SAFE** pins (lowest number first)
+3. Then all **UNKNOWN** pins (highest number first)
 
-The module has multiple stages. In stage 1, one color flashes. In stage 2, two colors flash (the original plus one more), and so on. Each stage, you must enter the **entire sequence from the beginning** using the mapping for your **current** strike count.
+**Example:** Serial is AB1234 (last digit 4 = even, contains A = vowel). Pins: 1-ARMED, 2-SAFE, 3-UNKNOWN, 4-ARMED, 5-SAFE. Order: SAFE first (2, 5), then UNKNOWN (3), then ARMED (4, 1). → Pull order: 2, 5, 3, 4, 1.
 
 ---
 
