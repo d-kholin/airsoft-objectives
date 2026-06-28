@@ -24,13 +24,13 @@ MODULE_PRESETS = [
     ("6 MODULES", 6),
 ]
 
-WIRE_COLORS = ["RED", "BLUE", "YELLOW", "WHITE", "BLACK"]
+WIRE_COLORS = ["RED", "BLUE", "YELLOW", "WHITE", "GREEN"]
 WIRE_RGB = {
     "RED": (255, 40, 40),
     "BLUE": (40, 100, 255),
     "YELLOW": (255, 220, 0),
     "WHITE": (240, 240, 240),
-    "BLACK": (60, 60, 60),
+    "GREEN": (0, 200, 80),
 }
 
 KEYPAD_COLUMNS = [
@@ -116,11 +116,11 @@ def _solve_wires(module, serial):
         else:
             return 1
     elif n == 5:
-        if wires[-1] == "BLACK" and _serial_last_odd(serial):
+        if wires[-1] == "GREEN" and _serial_last_odd(serial):
             return 3
         elif wires.count("RED") == 1 and wires.count("YELLOW") > 1:
             return 0
-        elif "BLACK" not in wires:
+        elif "GREEN" not in wires:
             return 1
         else:
             return 0
@@ -189,26 +189,48 @@ def _solve_button_release(module):
 
 def _generate_capacitor_module():
     count = random.randint(3, 4)
+    voltages = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+    all_combos = [(c, v) for c in CAP_COLORS for v in voltages]
+    chosen = random.sample(all_combos, count)
     caps = []
-    for i in range(count):
-        color = random.choice(CAP_COLORS)
-        voltage = random.choice([1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0])
+    for color, voltage in chosen:
         caps.append({"color": color, "voltage": voltage, "discharged": False})
-    correct = _solve_capacitor_order(caps)
     return {
         "type": "capacitor",
         "capacitors": caps,
-        "correct_order": correct,
         "discharge_step": 0,
         "solved": False,
         "selected": 0,
     }
 
 
-def _solve_capacitor_order(caps):
-    priority = {"RED": 0, "YELLOW": 1, "BLUE": 2, "GREEN": 3}
+def _solve_capacitor_order(caps, serial, indicators):
+    color_priority = {"RED": 0, "YELLOW": 1, "BLUE": 2, "GREEN": 3}
     indexed = list(enumerate(caps))
-    indexed.sort(key=lambda ic: (ic[1]["voltage"], priority.get(ic[1]["color"], 9)))
+    has_frk = "FRK" in indicators
+    has_car = "CAR" in indicators
+    has_vowel = _serial_has_vowel(serial)
+    last_odd = _serial_last_odd(serial)
+
+    if has_frk and has_car:
+        indexed.sort(key=lambda ic: (
+            color_priority.get(ic[1]["color"], 9), ic[1]["voltage"]
+        ))
+    elif has_frk:
+        indexed.sort(key=lambda ic: (
+            -ic[1]["voltage"], color_priority.get(ic[1]["color"], 9)
+        ))
+    elif has_vowel and last_odd:
+        reds = [ic for ic in indexed if ic[1]["color"] == "RED"]
+        others = [ic for ic in indexed if ic[1]["color"] != "RED"]
+        others.sort(key=lambda ic: (ic[1]["voltage"], color_priority.get(ic[1]["color"], 9)))
+        reds.sort(key=lambda ic: ic[1]["voltage"])
+        indexed = others + reds
+    else:
+        indexed.sort(key=lambda ic: (
+            ic[1]["voltage"], color_priority.get(ic[1]["color"], 9)
+        ))
+
     return [i for i, _ in indexed]
 
 
@@ -339,6 +361,56 @@ class BombDefusalMode(GameMode):
         self.failed_attempts = 0
         self.state = GameState.RUNNING
 
+    def _draw_7seg_digit(self, screen, x, y, digit, w, h, thick, color, dim_color):
+        hh = h // 2
+        t = thick
+        seg_rects = {
+            "a": (x + t, y, w - 2 * t, t),
+            "b": (x + w - t, y + t, t, hh - t),
+            "c": (x + w - t, y + hh, t, hh - t),
+            "d": (x + t, y + h - t, w - 2 * t, t),
+            "e": (x, y + hh, t, hh - t),
+            "f": (x, y + t, t, hh - t),
+            "g": (x + t, y + hh - t // 2, w - 2 * t, t),
+        }
+        active = {
+            0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg",
+            4: "bcfg", 5: "acdfg", 6: "acdefg", 7: "abc",
+            8: "abcdefg", 9: "abcdfg",
+        }.get(digit, "")
+        for seg, rect in seg_rects.items():
+            c = color if seg in active else dim_color
+            pygame.draw.rect(screen, c, rect)
+
+    def _draw_7seg_timer(self, screen, cx, y, t_remaining, w=28, h=48, thick=5, gap=6):
+        clamped = max(0.0, t_remaining)
+        mins = int(clamped) // 60
+        secs = int(clamped) % 60
+        hundredths = int((clamped % 1) * 100)
+        color = COLORS["red"] if clamped < 120 else COLORS["green"]
+        dim = tuple(max(c // 8, 6) for c in color)
+
+        groups = [(mins // 10, mins % 10), (secs // 10, secs % 10), (hundredths // 10, hundredths % 10)]
+        for gi, (d1, d2) in enumerate(groups):
+            self._draw_7seg_digit(screen, cx, y, d1, w, h, thick, color, dim)
+            cx += w + gap
+            self._draw_7seg_digit(screen, cx, y, d2, w, h, thick, color, dim)
+            cx += w + gap
+            if gi < 2:
+                sep_sz = thick
+                if gi == 0:
+                    pygame.draw.rect(screen, color, (cx, y + h // 3 - sep_sz // 2, sep_sz, sep_sz))
+                    pygame.draw.rect(screen, color, (cx, y + 2 * h // 3 - sep_sz // 2, sep_sz, sep_sz))
+                else:
+                    pygame.draw.rect(screen, color, (cx, y + h - sep_sz, sep_sz, sep_sz))
+                cx += sep_sz + gap
+
+    def _draw_selector(self, screen, y, h, x=35, w=None):
+        if w is None:
+            w = SCREEN_WIDTH - 70
+        pygame.draw.rect(screen, (60, 60, 20), (x, y, w, h))
+        pygame.draw.rect(screen, COLORS["yellow"], (x, y, 6, h))
+
     def handle_input(self, actions):
         if self.phase == "setup_timer":
             self._handle_setup_timer(actions)
@@ -373,6 +445,7 @@ class BombDefusalMode(GameMode):
 
     def _generate_bomb(self):
         self.serial = _generate_serial()
+        self.indicators = random.sample(NUMPAD_INDICATORS, random.randint(1, 3))
         generators = [
             _generate_wires_module, _generate_keypad_module, _generate_button_module,
             _generate_capacitor_module, _generate_pins_module, _generate_numpad_module,
@@ -476,7 +549,8 @@ class BombDefusalMode(GameMode):
             cap = mod["capacitors"][mod["selected"]]
             if cap["discharged"]:
                 return
-            expected_idx = mod["correct_order"][mod["discharge_step"]]
+            correct_order = _solve_capacitor_order(mod["capacitors"], self.serial, self.indicators)
+            expected_idx = correct_order[mod["discharge_step"]]
             if mod["selected"] == expected_idx:
                 cap["discharged"] = True
                 mod["discharge_step"] += 1
@@ -600,30 +674,27 @@ class BombDefusalMode(GameMode):
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_play(self, screen):
-        # Header
-        pygame.draw.rect(screen, DIM_RED, (0, 0, SCREEN_WIDTH, 50))
-        title = self.font_med.render("BOMB ACTIVE", True, COLORS["red"])
-        screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, centery=25))
+        # Header background
+        pygame.draw.rect(screen, (15, 5, 5), (0, 0, SCREEN_WIDTH, 90))
 
-        # Timer
-        mins = int(self.timer_remaining) // 60
-        secs = int(self.timer_remaining) % 60
-        timer_color = COLORS["red"] if self.timer_remaining < 30 else COLORS["white"]
-        timer_surf = self.font_med.render(f"{mins:02d}:{secs:02d}", True, timer_color)
-        screen.blit(timer_surf, timer_surf.get_rect(right=SCREEN_WIDTH - 15, centery=25))
-
-        # Strikes
+        # Strikes (left side)
         strike_text = "X " * self.strikes + "O " * (self.max_strikes - self.strikes)
         strike_surf = self.font_sm.render(f"STRIKES: {strike_text}", True, COLORS["red"])
-        screen.blit(strike_surf, (15, 12))
+        screen.blit(strike_surf, (15, 8))
 
-        # Serial number
+        # Serial number (right side)
         serial_surf = self.font_sm.render(f"S/N: {self.serial}", True, COLORS["white"])
-        screen.blit(serial_surf, serial_surf.get_rect(right=SCREEN_WIDTH - 15, y=55))
+        screen.blit(serial_surf, serial_surf.get_rect(right=SCREEN_WIDTH - 15, y=8))
+
+        # 7-segment timer (centered)
+        timer_w = 8 * 28 + 7 * 6 + 2 * (5 + 6)
+        timer_x = (SCREEN_WIDTH - timer_w) // 2
+        self._draw_7seg_timer(screen, timer_x, 16, self.timer_remaining, w=28, h=52, thick=5, gap=5)
+
+        pygame.draw.line(screen, DIM_RED, (0, 90), (SCREEN_WIDTH, 90))
 
         # Module tabs
-        pygame.draw.line(screen, DIM_RED, (0, 80), (SCREEN_WIDTH, 80))
-        tab_y = 85
+        tab_y = 95
         tab_x = 15
         for i, mod in enumerate(self.modules):
             is_current = i == self.current_module
@@ -640,13 +711,13 @@ class BombDefusalMode(GameMode):
             screen.blit(surf, (tab_x, tab_y))
             tab_x += surf.get_width() + 20
 
-        pygame.draw.line(screen, DIM_RED, (0, 115), (SCREEN_WIDTH, 115))
+        pygame.draw.line(screen, DIM_RED, (0, 125), (SCREEN_WIDTH, 125))
 
         # Current module content
         mod = self.modules[self.current_module]
         if mod["solved"]:
             solved_surf = self.font_big.render("MODULE DISARMED", True, COLORS["green"])
-            screen.blit(solved_surf, solved_surf.get_rect(center=(SCREEN_WIDTH // 2, 300)))
+            screen.blit(solved_surf, solved_surf.get_rect(center=(SCREEN_WIDTH // 2, 350)))
         elif mod["type"] == "wires":
             self._draw_wires_module(screen, mod)
         elif mod["type"] == "keypad":
@@ -682,7 +753,7 @@ class BombDefusalMode(GameMode):
             is_selected = i == mod["selected"]
 
             if is_selected:
-                pygame.draw.rect(screen, (40, 40, 50), (35, y - 5, SCREEN_WIDTH - 70, 45))
+                self._draw_selector(screen, y - 5, 45)
 
             wire_color = WIRE_RGB[color_name]
             pygame.draw.rect(screen, wire_color, (80, y + 8, 400, 12))
@@ -691,10 +762,6 @@ class BombDefusalMode(GameMode):
 
             label = self.font_sm.render(f"{i+1}. {color_name}", True, COLORS["white"] if is_selected else COLORS["grey"])
             screen.blit(label, (520, y + 2))
-
-            if is_selected:
-                cursor = self.font_sm.render(">", True, COLORS["yellow"])
-                screen.blit(cursor, (45, y + 2))
 
     def _draw_keypad_module(self, screen, mod):
         header = self.font_med.render("KEYPAD", True, COLORS["white"])
@@ -709,17 +776,17 @@ class BombDefusalMode(GameMode):
             already_pressed = sym in mod["pressed"]
 
             if is_selected:
-                pygame.draw.rect(screen, (40, 40, 50), (35, y - 5, 300, 50))
+                self._draw_selector(screen, y - 5, 50, w=350)
 
             if already_pressed:
                 color = COLORS["green"]
                 prefix = "[OK] "
             elif is_selected:
-                color = COLORS["yellow"]
-                prefix = ">  "
+                color = COLORS["white"]
+                prefix = "     "
             else:
                 color = COLORS["grey"]
-                prefix = "   "
+                prefix = "     "
 
             surf = self.font_med.render(f"{prefix}{sym}", True, color)
             screen.blit(surf, (50, y))
@@ -773,7 +840,7 @@ class BombDefusalMode(GameMode):
         screen.blit(header, (40, 130))
 
         info = self.font_sm.render(
-            "Discharge capacitors in the correct order", True, COLORS["grey"]
+            "Report colors, voltages, and indicators to your team", True, COLORS["grey"]
         )
         screen.blit(info, (40, 170))
 
@@ -783,12 +850,26 @@ class BombDefusalMode(GameMode):
         )
         screen.blit(progress, progress.get_rect(right=SCREEN_WIDTH - 40, y=130))
 
+        ind_x = 40
+        ind_y = 205
+        ind_label = self.font_sm.render("Indicators:", True, COLORS["white"])
+        screen.blit(ind_label, (ind_x, ind_y))
+        ind_x += ind_label.get_width() + 15
+        for ind_name in NUMPAD_INDICATORS:
+            lit = ind_name in self.indicators
+            color = COLORS["green"] if lit else COLORS["dark_grey"]
+            pygame.draw.circle(screen, color, (ind_x + 10, ind_y + 12), 8)
+            pygame.draw.circle(screen, COLORS["white"], (ind_x + 10, ind_y + 12), 8, 1)
+            label = self.font_mono.render(ind_name, True, COLORS["white"] if lit else COLORS["grey"])
+            screen.blit(label, (ind_x + 25, ind_y + 3))
+            ind_x += 95
+
         for i, cap in enumerate(mod["capacitors"]):
-            y = 220 + i * 80
+            y = 250 + i * 75
             is_selected = i == mod["selected"]
 
-            if is_selected:
-                pygame.draw.rect(screen, (40, 40, 50), (35, y - 5, SCREEN_WIDTH - 70, 70))
+            if is_selected and not cap["discharged"]:
+                self._draw_selector(screen, y - 5, 70)
 
             cap_color = CAP_COLOR_RGB[cap["color"]]
             body_rect = pygame.Rect(80, y, 200, 50)
@@ -814,9 +895,6 @@ class BombDefusalMode(GameMode):
             )
             screen.blit(label, (340, y + 12))
 
-            if is_selected and not cap["discharged"]:
-                cursor = self.font_sm.render(">", True, COLORS["yellow"])
-                screen.blit(cursor, (45, y + 12))
 
     def _draw_pins_module(self, screen, mod):
         header = self.font_med.render("DETONATOR PINS", True, COLORS["white"])
@@ -837,8 +915,8 @@ class BombDefusalMode(GameMode):
             y = 220 + i * 65
             is_selected = i == mod["selected"]
 
-            if is_selected:
-                pygame.draw.rect(screen, (40, 40, 50), (35, y - 5, SCREEN_WIDTH - 70, 55))
+            if is_selected and not pin["pulled"]:
+                self._draw_selector(screen, y - 5, 55)
 
             if pin["pulled"]:
                 pin_rect = pygame.Rect(80, y + 5, 180, 35)
@@ -861,10 +939,6 @@ class BombDefusalMode(GameMode):
                 )
 
             screen.blit(label, (340, y + 10))
-
-            if is_selected and not pin["pulled"]:
-                cursor = self.font_sm.render(">", True, COLORS["yellow"])
-                screen.blit(cursor, (45, y + 10))
 
     def _draw_numpad_module(self, screen, mod):
         header = self.font_med.render("NUMBER PAD", True, COLORS["white"])

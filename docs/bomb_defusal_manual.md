@@ -24,9 +24,9 @@ The defuser will see 3–6 colored wires. They must describe the **number of wir
 - Otherwise, cut the **2nd wire**.
 
 ### 5 Wires
-- If the last wire is BLACK and the **last digit of the serial number is odd**, cut the **4th wire**.
+- If the last wire is GREEN and the **last digit of the serial number is odd**, cut the **4th wire**.
 - Otherwise, if there is exactly one RED wire and more than one YELLOW wire, cut the **1st wire**.
-- Otherwise, if there are no BLACK wires, cut the **2nd wire**.
+- Otherwise, if there are no GREEN wires, cut the **2nd wire**.
 - Otherwise, cut the **1st wire**.
 
 ### 6 Wires
@@ -85,11 +85,20 @@ When the defuser holds the button (press GREEN and keep it held), a **colored st
 
 ## MODULE 4: CAPACITOR DISCHARGE
 
-The defuser will see 3–4 capacitors, each with a **color** (RED, BLUE, GREEN, or YELLOW) and a **voltage** (1.5V–5.0V). They must describe each capacitor's color and voltage. The capacitors must be discharged in a specific order — one wrong discharge is a strike.
+The defuser will see 3–4 capacitors, each with a **color** (RED, BLUE, GREEN, or YELLOW) and a **voltage** (1.5V–5.0V). They must tell you each capacitor's color and voltage, plus the **serial number** and which **indicators are lit** (shown at the top of the bomb screen). The capacitors must be discharged in a specific order — one wrong discharge is a strike.
 
-### Discharge Order Rules
+### Step 1: Determine which rule set applies
 
-Sort the capacitors by **voltage, lowest first**. If two capacitors have the same voltage, break the tie by color priority:
+Follow these rules **in order** — use the first that matches:
+
+1. If **both FRK and CAR** indicators are lit → use **Rule Set A**
+2. If **FRK** is lit (but not CAR) → use **Rule Set B**
+3. If the **serial contains a vowel** AND the **last digit is odd** → use **Rule Set C**
+4. Otherwise → use **Rule Set D**
+
+### Step 2: Apply the rule set
+
+**Rule Set A — Sort by color priority, then voltage:**
 
 | Priority | Color  |
 |----------|--------|
@@ -98,9 +107,21 @@ Sort the capacitors by **voltage, lowest first**. If two capacitors have the sam
 | 3rd      | BLUE   |
 | 4th      | GREEN  |
 
-Tell the defuser to discharge them in this order (lowest voltage first, using color priority for ties).
+Discharge all REDs first (lowest voltage first within same color), then YELLOWs, etc.
 
-**Example:** If the capacitors are GREEN 3.0V, RED 1.5V, BLUE 3.0V, YELLOW 4.5V — the order is: RED 1.5V → BLUE 3.0V → GREEN 3.0V → YELLOW 4.5V (BLUE before GREEN at 3.0V because BLUE has higher priority).
+**Rule Set B — Highest voltage first:**
+
+Discharge from highest voltage to lowest. If tied, use color priority (RED > YELLOW > BLUE > GREEN).
+
+**Rule Set C — Lowest voltage first, but RED caps last:**
+
+Discharge all non-RED capacitors from lowest voltage to highest (color priority for ties), then discharge RED capacitors from lowest to highest.
+
+**Rule Set D — Lowest voltage first:**
+
+Discharge from lowest voltage to highest. If tied, use color priority (RED > YELLOW > BLUE > GREEN).
+
+**Example:** Indicators FRK and CAR are both lit. Capacitors: GREEN 3.0V, RED 1.5V, BLUE 3.0V, YELLOW 4.5V. Rule Set A applies (both FRK and CAR lit). Sort by color priority: RED 1.5V → YELLOW 4.5V → BLUE 3.0V → GREEN 3.0V.
 
 ---
 
