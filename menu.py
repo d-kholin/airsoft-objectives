@@ -89,18 +89,32 @@ class MenuMode(GameMode):
 
         is_bomb = self.history_data and "strikes" in self.history_data[0]
         is_dom = self.history_data and "red_hold_time" in self.history_data[0]
+
+        # Shared column x-positions for header AND data so they line up.
+        # (pygame's default font is proportional, so we position each field
+        # explicitly rather than relying on string padding.)
+        COL_DATE, COL_RESULT, COL_TIME, COL_4, COL_5 = 40, 250, 470, 620, 780
         if is_bomb:
-            header_text = f"{'DATE':<18}{'RESULT':<12}{'TIME':>6}  {'STRIKES':>7}  {'MODULES':>7}"
+            label_result, label_4, label_5 = "RESULT", "STRIKES", "MODULES"
         elif is_dom:
-            header_text = f"{'DATE':<18}{'WINNER':<12}{'TIME':>6}  {'RED':>6}  {'BLUE':>6}"
+            label_result, label_4, label_5 = "WINNER", "RED", "BLUE"
         else:
-            header_text = f"{'DATE':<18}{'RESULT':<12}{'TIME':>6}  {'FAILED':>6}  {'CODES':>5}"
-        header = self.font_hist.render(header_text, True, COLORS["green"])
-        screen.blit(header, (40, 75))
+            label_result, label_4, label_5 = "RESULT", "FAILED", "CODES"
+
+        for x, label in (
+            (COL_DATE, "DATE"), (COL_RESULT, label_result), (COL_TIME, "TIME"),
+            (COL_4, label_4), (COL_5, label_5),
+        ):
+            surf = self.font_hist.render(label, True, COLORS["green"])
+            screen.blit(surf, (x, 75))
         pygame.draw.line(screen, COLORS["green"], (40, 100), (SCREEN_WIDTH - 40, 100))
 
         visible = 12
-        entries = list(reversed(self.history_data))
+        # Sort newest-first by timestamp so rows are always in time order,
+        # regardless of the order entries were written to the file.
+        entries = sorted(
+            self.history_data, key=lambda e: e.get("timestamp", ""), reverse=True
+        )
         max_scroll = max(0, len(entries) - visible)
         self.history_scroll = min(self.history_scroll, max_scroll)
         page = entries[self.history_scroll:self.history_scroll + visible]
@@ -115,22 +129,29 @@ class MenuMode(GameMode):
                 result_color = (255, 40, 40) if result == "RED" else (40, 100, 255)
             else:
                 result_color = COLORS["green"] if result == "VICTORY" else COLORS["red"]
-            date_surf = self.font_hist.render(f"{entry.get('timestamp', '?'):<18}", True, COLORS["white"])
-            screen.blit(date_surf, (40, y))
-            result_surf = self.font_hist.render(f"{result:<12}", True, result_color)
-            screen.blit(result_surf, (240, y))
+
             if is_bomb:
                 total = entry.get("modules_total", "?")
                 solved = entry.get("modules_solved", "?")
-                stats = f"{mins:>2}m{secs:02d}s  {entry.get('strikes', 0):>5}/3  {solved:>3}/{total}"
+                v4 = f"{entry.get('strikes', 0)}/3"
+                v5 = f"{solved}/{total}"
             elif is_dom:
                 rt = entry.get("red_hold_time", 0)
                 bt = entry.get("blue_hold_time", 0)
-                stats = f"{mins:>2}m{secs:02d}s  {rt//60}:{rt%60:02d}  {bt//60}:{bt%60:02d}"
+                v4 = f"{rt // 60}:{rt % 60:02d}"
+                v5 = f"{bt // 60}:{bt % 60:02d}"
             else:
-                stats = f"{mins:>2}m{secs:02d}s  {entry.get('failed_attempts', 0):>6}  {entry.get('codes_unlocked', 0):>3}/3"
-            stats_surf = self.font_hist.render(stats, True, COLORS["white"])
-            screen.blit(stats_surf, (420, y))
+                v4 = str(entry.get("failed_attempts", 0))
+                v5 = f"{entry.get('codes_unlocked', 0)}/3"
+
+            for x, text, color in (
+                (COL_DATE, str(entry.get("timestamp", "?")), COLORS["white"]),
+                (COL_RESULT, result, result_color),
+                (COL_TIME, f"{mins}m{secs:02d}s", COLORS["white"]),
+                (COL_4, v4, COLORS["white"]),
+                (COL_5, v5, COLORS["white"]),
+            ):
+                screen.blit(self.font_hist.render(text, True, color), (x, y))
 
         if len(entries) > visible:
             scroll_hint = self.font_desc.render(
