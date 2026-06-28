@@ -347,6 +347,7 @@ class BombDefusalMode(GameMode):
         self.result = None
         self.pulse_time = 0.0
         self.play_start_time = 0
+        self.play_end_time = 0
         self.failed_attempts = 0
         self.state = GameState.RUNNING
 
@@ -976,7 +977,7 @@ class BombDefusalMode(GameMode):
         sub_surf = self.font_med.render(sub, True, color)
         screen.blit(sub_surf, sub_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 10)))
 
-        elapsed = time.time() - self.play_start_time
+        elapsed = self.play_end_time - self.play_start_time
         stats = self.font_sm.render(
             f"Strikes: {self.strikes}  |  Time: {int(elapsed) // 60}m{int(elapsed) % 60:02d}s",
             True, COLORS["white"],
@@ -987,7 +988,8 @@ class BombDefusalMode(GameMode):
         screen.blit(prompt, prompt.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100)))
 
     def _save_history(self):
-        elapsed = time.time() - self.play_start_time
+        self.play_end_time = time.time()
+        elapsed = self.play_end_time - self.play_start_time
         entry = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M"),
             "result": self.result,
