@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
-sudo apt update
-sudo apt install -y python3-pygame
+if ! dpkg -s python3-pygame >/dev/null 2>&1; then
+    sudo apt update
+    sudo apt install -y python3-pygame
+fi
 
 sudo cp raspi-box.service /etc/systemd/system/
 sudo systemctl daemon-reload
