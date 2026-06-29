@@ -349,11 +349,11 @@ class BombDefusalMode(GameMode):
     description = "Defuse the bomb with help from your team over radio"
 
     def setup(self, config=None):
+        config = config or {}
         self.font_big = pygame.font.Font(None, 72)
         self.font_med = pygame.font.Font(None, 48)
         self.font_sm = pygame.font.Font(None, 36)
         self.font_mono = pygame.font.Font(None, 28)
-        self.phase = "setup_timer"
         self.timer_selection = 1
         self.custom_minutes = 10
         self.module_selection = 0
@@ -372,6 +372,14 @@ class BombDefusalMode(GameMode):
         self.play_end_time = 0
         self.failed_attempts = 0
         self.state = GameState.RUNNING
+
+        if "timer" in config and "modules" in config:
+            self.timer_total = config["timer"]
+            self.timer_remaining = self.timer_total
+            self.num_modules = config["modules"]
+            self._start_game()
+        else:
+            self.phase = "setup_timer"
 
     def _draw_7seg_digit(self, screen, x, y, digit, w, h, thick, color, dim_color):
         hh = h // 2
@@ -469,9 +477,12 @@ class BombDefusalMode(GameMode):
             self.module_selection = (self.module_selection + 1) % len(MODULE_PRESETS)
         if "START" in actions or "GREEN_BUTTON" in actions:
             self.num_modules = MODULE_PRESETS[self.module_selection][1]
-            self._generate_bomb()
-            self.phase = "play"
-            self.play_start_time = time.time()
+            self._start_game()
+
+    def _start_game(self):
+        self._generate_bomb()
+        self.phase = "play"
+        self.play_start_time = time.time()
 
     def _generate_bomb(self):
         self.serial = _generate_serial()

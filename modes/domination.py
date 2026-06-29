@@ -38,11 +38,11 @@ class DominationMode(GameMode):
     description = "Two teams fight to hold the objective — first to the goal wins"
 
     def setup(self, config=None):
+        config = config or {}
         self.font_big = pygame.font.Font(None, 80)
         self.font_med = pygame.font.Font(None, 52)
         self.font_sm = pygame.font.Font(None, 36)
         self.font_mono = pygame.font.Font(None, 28)
-        self.phase = "setup"
         self.goal_selection = 0
         self.goal_time = 0
         self.red_time = 0.0
@@ -61,6 +61,13 @@ class DominationMode(GameMode):
         for key, action in BUTTON_MAP.items():
             self.action_keys.setdefault(action, []).append(key)
         self.state = GameState.RUNNING
+
+        if "goal_time" in config:
+            self.goal_time = config["goal_time"]
+            self.phase = "play"
+            self.play_start_time = time.time()
+        else:
+            self.phase = "setup"
 
     def _is_held(self, action):
         pressed = pygame.key.get_pressed()
