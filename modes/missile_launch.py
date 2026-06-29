@@ -94,7 +94,8 @@ class MissileLaunchMode(GameMode):
         self.reversing = False         # True while RED is actively reversing
 
         self.completed_phase_name = ""
-        self.complete_flash = 0.0      # seconds remaining on the pulsing banner
+        self.show_complete_banner = False
+        self.awaiting_release = False
 
         self.result = None
         self.time_left_at_end = 0
@@ -312,9 +313,6 @@ class MissileLaunchMode(GameMode):
                 self._finish("TIMEOUT")
                 return
 
-        if self.complete_flash > 0:
-            self.complete_flash = max(0.0, self.complete_flash - dt)
-
         if self.phase == "prep":
             self._update_prep(dt)
 
@@ -342,9 +340,15 @@ class MissileLaunchMode(GameMode):
         dur = float(self._current_phase_duration())
         self.reversing = False
 
+        if self.awaiting_release:
+            if not blue:
+                self.awaiting_release = False
+            return
+
         if not self.phase_initiated:
             if blue and not red:
                 self.init_progress += dt
+                self.show_complete_banner = False
                 if self.init_progress >= INITIATE_HOLD:
                     self.phase_initiated = True
                     self.phase_remaining = dur
@@ -377,7 +381,8 @@ class MissileLaunchMode(GameMode):
             self.phase_initiated = False
             self.init_progress = 0.0
             self.phase_remaining = float(self._current_phase_duration())
-            self.complete_flash = 2.0
+            self.show_complete_banner = True
+            self.awaiting_release = True
 
     def _finish(self, result):
         self.result = result
@@ -660,8 +665,8 @@ class MissileLaunchMode(GameMode):
         # Telemetry
         self._draw_telemetry(screen, pygame.Rect(560, 260, 460, 220), DIM_AMBER)
 
-        # Phase-complete banner (pulses, overlays bottom of screen)
-        if self.complete_flash > 0:
+        # Phase-complete banner (pulses until player starts next phase)
+        if self.show_complete_banner:
             self._draw_complete_banner(screen)
 
         # Controls
