@@ -91,6 +91,9 @@ class MissileLaunchMode(GameMode):
 
         self.timer_remaining = 0.0
         self.abort_progress = 0.0
+        self.reversing = False         # True while RED is actively reversing
+
+        self.completed_phase_name = ""  # name shown on the completion banner
 
         self.result = None
         self.time_left_at_end = 0
@@ -168,6 +171,9 @@ class MissileLaunchMode(GameMode):
         }.get(self.phase)
         if handler:
             handler(actions)
+        elif self.phase == "phase_complete":
+            if any(a in actions for a in ("BLUE_BUTTON", "GREEN_BUTTON", "START")):
+                self._advance_after_complete()
         elif self.phase == "result":
             if "START" in actions or "GREEN_BUTTON" in actions:
                 self.setup()
@@ -301,7 +307,7 @@ class MissileLaunchMode(GameMode):
             self.telemetry.pop(0)
             self.telemetry.append(_telemetry_line())
 
-        if self.phase in ("prep", "code_entry"):
+        if self.phase in ("prep", "code_entry", "phase_complete"):
             self.game_remaining -= dt
             if self.game_remaining <= 0:
                 self.game_remaining = 0
@@ -333,6 +339,7 @@ class MissileLaunchMode(GameMode):
         blue = self._is_held("BLUE_BUTTON")
         red = self._is_held("RED_BUTTON")
         dur = float(self._current_phase_duration())
+        self.reversing = False
 
         if not self.phase_initiated:
             if blue and not red:
@@ -343,10 +350,10 @@ class MissileLaunchMode(GameMode):
                     self.init_progress = INITIATE_HOLD
                     self.app.sound.play("confirm")
             else:
-                # Release resets — must be a sustained hold.
                 self.init_progress = 0.0
         else:
             if red:
+                self.reversing = True
                 self.phase_remaining = min(dur, self.phase_remaining + dt)
                 if self.phase_remaining >= dur:
                     self.phase_initiated = False
@@ -358,13 +365,18 @@ class MissileLaunchMode(GameMode):
                     self._complete_phase()
 
     def _complete_phase(self):
+        self.completed_phase_name = PREP_PHASES[self.prep_index][0]
         self.prep_index += 1
         self.app.sound.play("confirm")
+        self.phase = "phase_complete"
+
+    def _advance_after_complete(self):
         if self.prep_index >= len(PREP_PHASES):
             self.phase = "code_entry"
             self.input_chars = []
             self.input_index = 0
         else:
+            self.phase = "prep"
             self.phase_initiated = False
             self.init_progress = 0.0
             self.phase_remaining = float(self._current_phase_duration())
@@ -406,6 +418,8 @@ class MissileLaunchMode(GameMode):
             self._draw_setup_code(screen)
         elif self.phase == "prep":
             self._draw_prep(screen)
+        elif self.phase == "phase_complete":
+            self._draw_phase_complete(screen)
         elif self.phase == "code_entry":
             self._draw_code_entry(screen)
         elif self.phase == "countdown":
@@ -573,10 +587,17 @@ class MissileLaunchMode(GameMode):
             pct = self.init_progress / INITIATE_HOLD
             status = f"INITIATING {name}..."
             bar_col = COLORS["yellow"]
+            reversing = False
+        elif self.reversing:
+            pct = 1.0 - (self.phase_remaining / dur) if dur > 0 else 1.0
+            status = f"WARNING: REVERSING {name}"
+            bar_col = ALERT_RED
+            reversing = True
         else:
             pct = 1.0 - (self.phase_remaining / dur) if dur > 0 else 1.0
             status = f"{name}  {self._fmt(self.phase_remaining)}"
             bar_col = AMBER
+            reversing = False
 
         # Status text above the bar
         label = self.font_med.render(status, True, bar_col)
@@ -588,7 +609,25 @@ class MissileLaunchMode(GameMode):
         fill = int(bar_w * pct)
         if fill > 0:
             pygame.draw.rect(screen, bar_col, (bar_x, bar_y, fill, bar_h))
+
+        if reversing and fill > 0:
+            # Red tint overlay + directional arrows
+            overlay = pygame.Surface((fill, bar_h), pygame.SRCALPHA)
+            overlay.fill((255, 30, 30, 100))
+            screen.blit(overlay, (bar_x, bar_y))
+            for ax in range(bar_x + fill - 20, bar_x, -40):
+                if ax > bar_x:
+                    pygame.draw.polygon(screen, ALERT_RED, [
+                        (ax, bar_y + 4), (ax, bar_y + bar_h - 4),
+                        (ax - 16, bar_y + bar_h // 2)])
+
         pygame.draw.rect(screen, bar_col, (bar_x, bar_y, bar_w, bar_h), 2)
+
+        if reversing:
+            sub = self.font_sm.render(
+                f"{name}  {self._fmt(self.phase_remaining)}  >>>  REVERSING",
+                True, ALERT_RED)
+            screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=bar_y + bar_h + 6))
 
     def _draw_prep(self, screen):
         self._draw_grid(screen, (16, 12, 0))
@@ -626,12 +665,62 @@ class MissileLaunchMode(GameMode):
         self._draw_telemetry(screen, pygame.Rect(560, 260, 460, 220), DIM_AMBER)
 
         # Controls
-        if not self.phase_initiated:
+        if self.reversing:
+            hint_text = "[RED] held — progress reversing"
+            hint_col = ALERT_RED
+        elif not self.phase_initiated:
             hint_text = "HOLD [BLUE] 4s to initiate   //   Release resets"
+            hint_col = COLORS["grey"]
         else:
             hint_text = "Timer runs automatically   //   [RED] reverses progress"
-        hint = self.font_sm.render(hint_text, True, COLORS["grey"])
+            hint_col = COLORS["grey"]
+        hint = self.font_sm.render(hint_text, True, hint_col)
         screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 28))
+
+    def _draw_phase_complete(self, screen):
+        self._draw_grid(screen, (16, 12, 0))
+        pygame.draw.rect(screen, DIM_AMBER, (0, 0, SCREEN_WIDTH, 52))
+        header = self.font_sm.render("STRATEGIC LAUNCH CONTROL  //  PREP SEQUENCE", True, AMBER)
+        screen.blit(header, header.get_rect(centerx=SCREEN_WIDTH // 2, centery=26))
+
+        # Checklist with the just-completed phase showing green
+        self._draw_phase_checklist(screen, 72)
+
+        # Game clock
+        clock_col = ALERT_RED if self.game_remaining < 60 else AMBER
+        clock = self.font_med.render(self._fmt(self.game_remaining), True, clock_col)
+        screen.blit(clock, clock.get_rect(right=SCREEN_WIDTH - 16, y=62))
+        gl = self.font_sm.render("GAME TIME", True, COLORS["grey"])
+        screen.blit(gl, gl.get_rect(right=SCREEN_WIDTH - 16, y=104))
+
+        # Dark overlay
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 140))
+        screen.blit(overlay, (0, 0))
+
+        # Green banner strip with scanlines
+        banner_h = 120
+        banner_y = 220
+        pygame.draw.rect(screen, (0, 40, 20), (0, banner_y, SCREEN_WIDTH, banner_h))
+        pygame.draw.line(screen, COLORS["green"], (0, banner_y), (SCREEN_WIDTH, banner_y), 2)
+        pygame.draw.line(screen, COLORS["green"],
+                         (0, banner_y + banner_h), (SCREEN_WIDTH, banner_y + banner_h), 2)
+        for sy in range(banner_y + 4, banner_y + banner_h, 4):
+            pygame.draw.line(screen, (0, 60, 30), (0, sy), (SCREEN_WIDTH, sy), 1)
+
+        title = self.font_big.render(f"{self.completed_phase_name} COMPLETE", True, COLORS["green"])
+        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, banner_y + 42)))
+
+        if self.prep_index < len(PREP_PHASES):
+            next_name = PREP_PHASES[self.prep_index][0]
+            sub = self.font_sm.render(f">>> ADVANCING TO {next_name} >>>", True, COLORS["green"])
+        else:
+            sub = self.font_sm.render(">>> ALL PHASES COMPLETE — ENTER LAUNCH CODE >>>", True, COLORS["green"])
+        screen.blit(sub, sub.get_rect(center=(SCREEN_WIDTH // 2, banner_y + 90)))
+
+        # Dismiss hint
+        hint = self.font_sm.render("Press BLUE / GREEN / START to continue", True, COLORS["grey"])
+        screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 38))
 
     def _draw_code_entry(self, screen):
         self._draw_grid(screen, (16, 12, 0))
