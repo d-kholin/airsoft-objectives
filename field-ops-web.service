@@ -1,0 +1,14 @@
+[Unit]
+Description=Field Ops Web Control Panel
+After=network.target
+
+[Service]
+Type=simple
+User=michael
+WorkingDirectory=/home/michael/airsoft
+ExecStart=/usr/bin/python3 -c "from config_store import ConfigStore; from game_controller import GameController; from web_server import run_web_server; run_web_server(ConfigStore(), GameController())"
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
