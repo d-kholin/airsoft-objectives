@@ -1,24 +1,14 @@
 import pygame
 import math
 import random
-from game_mode import GameMode, GameState
+import time
+from game_mode import GameMode
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT, BUTTON_MAP
 from ui import draw_menu_item
-import json
-import time
-from pathlib import Path
+from widgets import draw_7seg_time, handle_custom_timer, draw_custom_timer
+from presets import timer_presets
 
-HISTORY_FILE = Path(__file__).parent.parent / "data" / "domination_history.json"
-
-GOAL_PRESETS = [
-    ("5 MIN", 300),
-    ("10 MIN", 600),
-    ("15 MIN", 900),
-    ("20 MIN", 1200),
-    ("25 MIN", 1500),
-    ("30 MIN", 1800),
-    ("CUSTOM", None),
-]
+GOAL_PRESETS = timer_presets()
 
 CAPTURE_TIME = 10.0
 
@@ -30,15 +20,10 @@ COLOR_BLUE = (40, 100, 255)
 DIM_RED = (80, 15, 15)
 DIM_BLUE = (15, 30, 80)
 
-SEG_MAP = {
-    0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg",
-    4: "bcfg", 5: "acdfg", 6: "acdefg", 7: "abc",
-    8: "abcdefg", 9: "abcdfg",
-}
-
 
 class DominationMode(GameMode):
     name = "Domination"
+    mode_id = "domination"
     description = "Two teams fight to hold the objective — first to the goal wins"
 
     def setup(self, config=None):
@@ -65,7 +50,6 @@ class DominationMode(GameMode):
         self.action_keys = {}
         for key, action in BUTTON_MAP.items():
             self.action_keys.setdefault(action, []).append(key)
-        self.state = GameState.RUNNING
 
         if "goal_time" in config:
             self.goal_time = config["goal_time"]
@@ -120,13 +104,10 @@ class DominationMode(GameMode):
                 self._start_play(preset)
 
     def _handle_setup_custom(self, actions):
-        if "UP" in actions:
-            self.custom_minutes = min(99, self.custom_minutes + 1)
-        if "DOWN" in actions:
-            self.custom_minutes = max(1, self.custom_minutes - 1)
-        if "RED_BUTTON" in actions:
+        self.custom_minutes, result = handle_custom_timer(actions, self.custom_minutes)
+        if result == "back":
             self.phase = "setup"
-        if "START" in actions or "GREEN_BUTTON" in actions:
+        elif result == "confirm":
             self._start_play(self.custom_minutes * 60)
 
     def _start_play(self, goal_seconds):
@@ -385,45 +366,6 @@ class DominationMode(GameMode):
             pygame.draw.circle(screen, p["color"], (px, py), 3)
             pygame.draw.circle(screen, (15, 15, 15), (px, py), 3, 1)
 
-    def _draw_7seg_digit(self, screen, x, y, digit, w, h, thick, color, dim_color):
-        hh = h // 2
-        t = thick
-        seg_rects = {
-            "a": (x + t, y, w - 2 * t, t),
-            "b": (x + w - t, y + t, t, hh - t),
-            "c": (x + w - t, y + hh, t, hh - t),
-            "d": (x + t, y + h - t, w - 2 * t, t),
-            "e": (x, y + hh, t, hh - t),
-            "f": (x, y + t, t, hh - t),
-            "g": (x + t, y + hh - t // 2, w - 2 * t, t),
-        }
-        active = SEG_MAP.get(digit, "")
-        for seg, rect in seg_rects.items():
-            c = color if seg in active else dim_color
-            pygame.draw.rect(screen, c, rect)
-
-    def _draw_7seg_time(self, screen, cx, y, seconds, color, w=24, h=40, thick=4, gap=5):
-        dim = tuple(max(c // 8, 6) for c in color)
-        clamped = max(0.0, seconds)
-        mins = int(clamped) // 60
-        secs = int(clamped) % 60
-        hundredths = int((clamped % 1) * 100)
-
-        groups = [(mins // 10, mins % 10), (secs // 10, secs % 10), (hundredths // 10, hundredths % 10)]
-        for gi, (d1, d2) in enumerate(groups):
-            self._draw_7seg_digit(screen, cx, y, d1, w, h, thick, color, dim)
-            cx += w + gap
-            self._draw_7seg_digit(screen, cx, y, d2, w, h, thick, color, dim)
-            cx += w + gap
-            if gi < 2:
-                sep_sz = thick
-                if gi == 0:
-                    pygame.draw.rect(screen, color, (cx, y + h // 3 - sep_sz // 2, sep_sz, sep_sz))
-                    pygame.draw.rect(screen, color, (cx, y + 2 * h // 3 - sep_sz // 2, sep_sz, sep_sz))
-                else:
-                    pygame.draw.rect(screen, color, (cx, y + h - sep_sz, sep_sz, sep_sz))
-                cx += sep_sz + gap
-
     def _draw_setup(self, screen):
         title = self.font_big.render("DOMINATION", True, COLORS["yellow"])
         screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
@@ -444,22 +386,10 @@ class DominationMode(GameMode):
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_setup_custom(self, screen):
-        title = self.font_big.render("DOMINATION", True, COLORS["yellow"])
-        screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
-
-        sub = self.font_sm.render("Set custom hold time", True, COLORS["white"])
-        screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=110))
-
-        val = self.font_big.render(f"{self.custom_minutes:02d}:00", True, COLORS["green"])
-        screen.blit(val, val.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 10)))
-
-        label = self.font_sm.render("MINUTES", True, COLORS["grey"])
-        screen.blit(label, label.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT // 2 + 50))
-
-        hints = self.font_sm.render(
-            "UP/DOWN=adjust  START/GREEN=confirm  RED=back", True, COLORS["grey"]
+        draw_custom_timer(
+            screen, self.font_big, self.font_sm, "DOMINATION",
+            self.custom_minutes, sub="Set custom hold time",
         )
-        screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_play(self, screen):
         mid = SCREEN_WIDTH // 2
@@ -502,10 +432,10 @@ class DominationMode(GameMode):
         timer_pixel_w = 6 * (seg_w + seg_gap) + 2 * (seg_t + seg_gap)
 
         red_timer_x = qtr - timer_pixel_w // 2
-        self._draw_7seg_time(screen, red_timer_x, timer_y, self.red_time, COLOR_RED, seg_w, seg_h, seg_t, seg_gap)
+        draw_7seg_time(screen, red_timer_x, timer_y, self.red_time, COLOR_RED, seg_w, seg_h, seg_t, seg_gap)
 
         blue_timer_x = mid + qtr - timer_pixel_w // 2
-        self._draw_7seg_time(screen, blue_timer_x, timer_y, self.blue_time, COLOR_BLUE, seg_w, seg_h, seg_t, seg_gap)
+        draw_7seg_time(screen, blue_timer_x, timer_y, self.blue_time, COLOR_BLUE, seg_w, seg_h, seg_t, seg_gap)
 
         # Goal progress bars
         bar_y = 200
@@ -594,29 +524,11 @@ class DominationMode(GameMode):
     def _save_history(self):
         self.play_end_time = time.time()
         elapsed = self.play_end_time - self.play_start_time
-        entry = {
+        self.save_history({
             "timestamp": time.strftime("%Y-%m-%d %H:%M"),
             "result": self.result,
             "elapsed_seconds": round(elapsed),
             "red_hold_time": round(self.red_time),
             "blue_hold_time": round(self.blue_time),
             "goal_time": self.goal_time,
-        }
-        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        history = []
-        if HISTORY_FILE.exists():
-            try:
-                history = json.loads(HISTORY_FILE.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-        history.append(entry)
-        HISTORY_FILE.write_text(json.dumps(history, indent=2))
-
-    @staticmethod
-    def load_history():
-        if HISTORY_FILE.exists():
-            try:
-                return json.loads(HISTORY_FILE.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-        return []
+        })

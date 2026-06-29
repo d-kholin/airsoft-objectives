@@ -1,8 +1,13 @@
 import pygame
-from game_mode import GameMode, GameState
+from game_mode import GameMode
 from registry import discover_modes
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
 from ui import draw_menu_item
+from fonts import get_font, char_width
+
+# History table column widths, in monospace character cells:
+# DATE, RESULT/WINNER, TIME, col4, col5.
+HIST_COL_CHARS = [17, 9, 8, 9, 8]
 
 
 class MenuMode(GameMode):
@@ -16,8 +21,9 @@ class MenuMode(GameMode):
         self.font_title = pygame.font.Font(None, 80)
         self.font_item = pygame.font.Font(None, 52)
         self.font_desc = pygame.font.Font(None, 32)
-        self.font_hist = pygame.font.Font(None, 34)
-        self.state = GameState.RUNNING
+        # Monospace so history columns align by character cell, not by guessing
+        # pixel offsets for a proportional font.
+        self.font_hist = get_font(28, mono=True)
 
     def handle_input(self, actions):
         if self.show_history:
@@ -90,10 +96,17 @@ class MenuMode(GameMode):
         is_bomb = self.history_data and "strikes" in self.history_data[0]
         is_dom = self.history_data and "red_hold_time" in self.history_data[0]
 
-        # Shared column x-positions for header AND data so they line up.
-        # (pygame's default font is proportional, so we position each field
-        # explicitly rather than relying on string padding.)
-        COL_DATE, COL_RESULT, COL_TIME, COL_4, COL_5 = 40, 250, 470, 620, 780
+        # Column x-positions derived from the monospace cell width, so the
+        # header and every data row line up by construction.
+        left = 40
+        cw = char_width(self.font_hist)
+        cols = []
+        acc = left
+        for width in HIST_COL_CHARS:
+            cols.append(acc)
+            acc += width * cw
+        COL_DATE, COL_RESULT, COL_TIME, COL_4, COL_5 = cols
+
         if is_bomb:
             label_result, label_4, label_5 = "RESULT", "STRIKES", "MODULES"
         elif is_dom:

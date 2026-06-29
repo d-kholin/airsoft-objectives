@@ -1,14 +1,18 @@
 """Registry of available game modes and their configurable settings."""
 
-TIMER_OPTIONS = [
-    {"label": "5 MIN", "value": 300},
-    {"label": "10 MIN", "value": 600},
-    {"label": "15 MIN", "value": 900},
-    {"label": "20 MIN", "value": 1200},
-    {"label": "25 MIN", "value": 1500},
-    {"label": "30 MIN", "value": 1800},
-    {"label": "CUSTOM", "value": -1},
-]
+from presets import (
+    CUSTOM_MIN_MINUTES,
+    CUSTOM_MAX_MINUTES,
+    MODULE_PRESETS,
+    registry_options,
+    timer_presets,
+)
+
+TIMER_OPTIONS = registry_options(timer_presets())
+TIMER_OPTIONS_WITH_OFF = registry_options(timer_presets(include_off=True))
+MODULE_OPTIONS = registry_options(MODULE_PRESETS)
+
+_CUSTOM = {"custom_min": CUSTOM_MIN_MINUTES, "custom_max": CUSTOM_MAX_MINUTES}
 
 GAME_MODES = {
     "comms_hack": {
@@ -18,10 +22,9 @@ GAME_MODES = {
             "timer": {
                 "label": "Timer",
                 "type": "choice",
-                "options": [{"label": "OFF", "value": 0}] + TIMER_OPTIONS,
+                "options": TIMER_OPTIONS_WITH_OFF,
                 "default": 300,
-                "custom_min": 1,
-                "custom_max": 99,
+                **_CUSTOM,
             }
         },
     },
@@ -34,18 +37,12 @@ GAME_MODES = {
                 "type": "choice",
                 "options": TIMER_OPTIONS,
                 "default": 900,
-                "custom_min": 1,
-                "custom_max": 99,
+                **_CUSTOM,
             },
             "modules": {
                 "label": "Modules",
                 "type": "choice",
-                "options": [
-                    {"label": "3 MODULES", "value": 3},
-                    {"label": "4 MODULES", "value": 4},
-                    {"label": "5 MODULES", "value": 5},
-                    {"label": "6 MODULES", "value": 6},
-                ],
+                "options": MODULE_OPTIONS,
                 "default": 4,
             },
         },
@@ -59,8 +56,7 @@ GAME_MODES = {
                 "type": "choice",
                 "options": TIMER_OPTIONS,
                 "default": 600,
-                "custom_min": 1,
-                "custom_max": 99,
+                **_CUSTOM,
             }
         },
     },

@@ -3,16 +3,10 @@ from flask import Flask, request, jsonify, render_template_string, send_file
 from config_store import ConfigStore
 from game_controller import GameController
 from game_registry import GAME_MODES, get_mode_info, list_modes
+from history import load_history
 from pathlib import Path
-import json
 
 DATA_DIR = Path(__file__).parent / "data"
-
-HISTORY_FILES = {
-    "comms_hack": DATA_DIR / "comms_hack_history.json",
-    "bomb_defusal": DATA_DIR / "bomb_defusal_history.json",
-    "domination": DATA_DIR / "domination_history.json",
-}
 
 log = logging.getLogger("werkzeug")
 log.setLevel(logging.ERROR)
@@ -591,16 +585,10 @@ def create_app(config_store, game_controller):
     @app.route("/api/history")
     def get_history():
         result = {}
-        for mode_id, path in HISTORY_FILES.items():
-            if path.exists():
-                try:
-                    entries = json.loads(path.read_text())
-                    entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
-                    result[mode_id] = entries[:50]
-                except (json.JSONDecodeError, OSError):
-                    result[mode_id] = []
-            else:
-                result[mode_id] = []
+        for mode_id in list_modes():
+            entries = load_history(mode_id)
+            entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+            result[mode_id] = entries[:50]
         return jsonify(result)
 
     @app.route("/api/screen")

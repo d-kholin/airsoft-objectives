@@ -1,13 +1,14 @@
 import pygame
 import math
 import random
-import json
 import time
 import subprocess
-from pathlib import Path
-from game_mode import GameMode, GameState
+from game_mode import GameMode
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
 from ui import draw_menu_item
+from widgets import handle_custom_timer, draw_custom_timer
+from presets import timer_presets
+from fonts import get_font
 
 
 def _get_hotspot_ip():
@@ -23,19 +24,12 @@ def _get_hotspot_ip():
     except Exception:
         return "?.?.?.?"
 
-HISTORY_FILE = Path(__file__).parent.parent / "data" / "comms_hack_history.json"
-
 CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-TIMER_PRESETS = [
-    ("OFF", 0),
-    ("5 MIN", 300),
-    ("10 MIN", 600),
-    ("15 MIN", 900),
-    ("20 MIN", 1200),
-    ("25 MIN", 1500),
-    ("30 MIN", 1800),
-    ("CUSTOM", None),
-]
+TIMER_PRESETS = timer_presets(include_off=True)
+
+# Terminal pane the scrolling stats live in; text is clipped to it so long
+# lines read like a contained readout instead of bleeding into the auth slots.
+STATS_PANE = pygame.Rect(10, 85, 480, 285)
 
 DIM_GREEN = (0, 90, 35)
 AMBER = (200, 160, 0)
@@ -58,6 +52,7 @@ def _random_stat_line():
 
 class CommsHackMode(GameMode):
     name = "Comms Array Hack"
+    mode_id = "comms_hack"
     description = "Enter 3 codes to hack the comms array before time runs out"
 
     def setup(self, config=None):
@@ -65,7 +60,8 @@ class CommsHackMode(GameMode):
         self.font_big = pygame.font.Font(None, 72)
         self.font_med = pygame.font.Font(None, 48)
         self.font_sm = pygame.font.Font(None, 36)
-        self.font_mono = pygame.font.Font(None, 28)
+        # Fixed-width face for the terminal readouts (stats + command log).
+        self.font_mono = get_font(22, mono=True)
         self.codes = []
         self.current_code = []
         self.char_index = 0
@@ -87,7 +83,6 @@ class CommsHackMode(GameMode):
         self.cmd_log = []
         self.hotspot_ip = _get_hotspot_ip()
         self.setup_source_selection = 0
-        self.state = GameState.RUNNING
 
         # If timer was queued via web with codes already set, go straight to play
         if "timer" in config and config["timer"] > 0:
@@ -177,13 +172,10 @@ class CommsHackMode(GameMode):
                 self._start_play(preset)
 
     def _handle_setup_custom(self, actions):
-        if "UP" in actions:
-            self.custom_minutes = min(99, self.custom_minutes + 1)
-        if "DOWN" in actions:
-            self.custom_minutes = max(1, self.custom_minutes - 1)
-        if "RED_BUTTON" in actions:
+        self.custom_minutes, result = handle_custom_timer(actions, self.custom_minutes)
+        if result == "back":
             self.phase = "setup_timer"
-        if "START" in actions or "GREEN_BUTTON" in actions:
+        elif result == "confirm":
             self._start_play(self.custom_minutes * 60)
 
     def _start_play(self, timer_seconds):
@@ -391,22 +383,9 @@ class CommsHackMode(GameMode):
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_setup_custom(self, screen):
-        title = self.font_big.render("SET TIMER", True, COLORS["yellow"])
-        screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
-
-        sub = self.font_sm.render("Set custom time", True, COLORS["white"])
-        screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=110))
-
-        val = self.font_big.render(f"{self.custom_minutes:02d}:00", True, COLORS["green"])
-        screen.blit(val, val.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 10)))
-
-        label = self.font_sm.render("MINUTES", True, COLORS["grey"])
-        screen.blit(label, label.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT // 2 + 50))
-
-        hints = self.font_sm.render(
-            "UP/DOWN=adjust  START/GREEN=confirm  RED=back", True, COLORS["grey"]
+        draw_custom_timer(
+            screen, self.font_big, self.font_sm, "SET TIMER", self.custom_minutes,
         )
-        screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_play(self, screen):
         # --- Header bar ---
@@ -436,11 +415,14 @@ class CommsHackMode(GameMode):
         pygame.draw.line(screen, DIM_GREEN, (0, 80), (SCREEN_WIDTH, 80))
 
         # --- Scrolling stats panel (left side) ---
-        stats_rect = pygame.Rect(10, 85, 480, 280)
+        # Clip so over-long readouts are cropped at the pane edge rather than
+        # bleeding across into the auth slots on the right.
+        screen.set_clip(STATS_PANE)
         for i, line in enumerate(self.stat_lines):
             color = DIM_GREEN if i % 2 == 0 else (0, 70, 30)
             surf = self.font_mono.render(line, True, color)
-            screen.blit(surf, (stats_rect.x, stats_rect.y + i * 23))
+            screen.blit(surf, (STATS_PANE.x, STATS_PANE.y + i * 23))
+        screen.set_clip(None)
 
         # --- Auth slots (right side) ---
         slots_x = 510
@@ -477,32 +459,14 @@ class CommsHackMode(GameMode):
 
     def _save_history(self):
         elapsed = time.time() - self.play_start_time
-        entry = {
+        self.save_history({
             "timestamp": time.strftime("%Y-%m-%d %H:%M"),
             "result": self.result,
             "elapsed_seconds": round(elapsed),
             "failed_attempts": self.failed_attempts,
             "codes_unlocked": sum(self.matched),
             "timer_preset": self.timer_total,
-        }
-        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        history = []
-        if HISTORY_FILE.exists():
-            try:
-                history = json.loads(HISTORY_FILE.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-        history.append(entry)
-        HISTORY_FILE.write_text(json.dumps(history, indent=2))
-
-    @staticmethod
-    def load_history():
-        if HISTORY_FILE.exists():
-            try:
-                return json.loads(HISTORY_FILE.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-        return []
+        })
 
     def _draw_char_input(self, screen, chars, char_index, x, y):
         cx = x

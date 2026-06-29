@@ -10,19 +10,19 @@ A cooperative puzzle game inspired by *Keep Talking and Nobody Explodes*. One pl
 
 **Modules:** Wires, Keypad, Button, Capacitor Discharge, Detonator Pins, Number Pad
 
-**Settings:** Timer (10–60 min), Module count (3–6)
+**Settings:** Timer (5–30 min in 5-min steps, or custom), Module count (3–6)
 
 ### Comms Array Hack
 
 A game master sets three secret codes before the match. Players must find the codes in the field and enter them into the terminal to "hack" the comms array. Each code attempt triggers a decryption animation before revealing success or failure.
 
-**Settings:** Timer (off, or 3–20 min)
+**Settings:** Timer (off, 5–30 min in 5-min steps, or custom)
 
 ### Domination
 
 Two teams fight over a single control point. Hold your team's button to capture — release and the progress drains back. First team to accumulate the target hold time wins. Features a live stick-figure battle scene.
 
-**Settings:** Goal time (5, 10, or 15 min)
+**Settings:** Goal time (5–30 min in 5-min steps, or custom)
 
 ## Hardware
 
@@ -86,6 +86,10 @@ game_mode.py            Base class for all modes
 registry.py             Auto-discovers mode classes
 menu.py                 Main menu with mode selection and history viewer
 ui.py                   Shared UI components (checklist menu items)
+widgets.py              Shared widgets (7-segment timer, custom-timer screen)
+fonts.py                Cached font loader (monospace for terminal/table UI)
+presets.py              Single source of timer/module presets
+history.py              Shared per-mode history load/append
 sound.py                Sound effect manager (assets/sounds/*.wav)
 
 modes/
@@ -142,6 +146,17 @@ python3 main.py --windowed
 ```
 
 The web server starts automatically with the app. Access it at `http://localhost:8080`.
+
+### Tests
+
+The bomb-defusal solver logic is covered by tests that assert the on-screen
+puzzle rules stay in sync with [the printed manual](docs/bomb_defusal_manual.md),
+plus tests for the shared preset/history helpers. They use only the standard
+library — no extra install needed:
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
 
 ## Adding a Game Mode
 

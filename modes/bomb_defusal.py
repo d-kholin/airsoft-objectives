@@ -1,31 +1,14 @@
 import pygame
 import math
 import random
-import json
 import time
-from pathlib import Path
-from game_mode import GameMode, GameState
+from game_mode import GameMode
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
 from ui import draw_menu_item
+from widgets import draw_7seg_time, seg7_width, handle_custom_timer, draw_custom_timer
+from presets import timer_presets, MODULE_PRESETS
 
-HISTORY_FILE = Path(__file__).parent.parent / "data" / "bomb_defusal_history.json"
-
-TIMER_PRESETS = [
-    ("5 MIN", 300),
-    ("10 MIN", 600),
-    ("15 MIN", 900),
-    ("20 MIN", 1200),
-    ("25 MIN", 1500),
-    ("30 MIN", 1800),
-    ("CUSTOM", None),
-]
-
-MODULE_PRESETS = [
-    ("3 MODULES", 3),
-    ("4 MODULES", 4),
-    ("5 MODULES", 5),
-    ("6 MODULES", 6),
-]
+TIMER_PRESETS = timer_presets()
 
 WIRE_COLORS = ["RED", "BLUE", "YELLOW", "WHITE", "GREEN"]
 WIRE_RGB = {
@@ -341,6 +324,7 @@ def _solve_numpad(module, serial):
 
 class BombDefusalMode(GameMode):
     name = "Bomb Defusal"
+    mode_id = "bomb_defusal"
     description = "Defuse the bomb with help from your team over radio"
 
     def setup(self, config=None):
@@ -366,7 +350,6 @@ class BombDefusalMode(GameMode):
         self.play_start_time = 0
         self.play_end_time = 0
         self.failed_attempts = 0
-        self.state = GameState.RUNNING
 
         if "timer" in config and "modules" in config:
             self.timer_total = config["timer"]
@@ -375,50 +358,6 @@ class BombDefusalMode(GameMode):
             self._start_game()
         else:
             self.phase = "setup_timer"
-
-    def _draw_7seg_digit(self, screen, x, y, digit, w, h, thick, color, dim_color):
-        hh = h // 2
-        t = thick
-        seg_rects = {
-            "a": (x + t, y, w - 2 * t, t),
-            "b": (x + w - t, y + t, t, hh - t),
-            "c": (x + w - t, y + hh, t, hh - t),
-            "d": (x + t, y + h - t, w - 2 * t, t),
-            "e": (x, y + hh, t, hh - t),
-            "f": (x, y + t, t, hh - t),
-            "g": (x + t, y + hh - t // 2, w - 2 * t, t),
-        }
-        active = {
-            0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg",
-            4: "bcfg", 5: "acdfg", 6: "acdefg", 7: "abc",
-            8: "abcdefg", 9: "abcdfg",
-        }.get(digit, "")
-        for seg, rect in seg_rects.items():
-            c = color if seg in active else dim_color
-            pygame.draw.rect(screen, c, rect)
-
-    def _draw_7seg_timer(self, screen, cx, y, t_remaining, w=28, h=48, thick=5, gap=6):
-        clamped = max(0.0, t_remaining)
-        mins = int(clamped) // 60
-        secs = int(clamped) % 60
-        hundredths = int((clamped % 1) * 100)
-        color = COLORS["red"] if clamped < 120 else COLORS["green"]
-        dim = tuple(max(c // 8, 6) for c in color)
-
-        groups = [(mins // 10, mins % 10), (secs // 10, secs % 10), (hundredths // 10, hundredths % 10)]
-        for gi, (d1, d2) in enumerate(groups):
-            self._draw_7seg_digit(screen, cx, y, d1, w, h, thick, color, dim)
-            cx += w + gap
-            self._draw_7seg_digit(screen, cx, y, d2, w, h, thick, color, dim)
-            cx += w + gap
-            if gi < 2:
-                sep_sz = thick
-                if gi == 0:
-                    pygame.draw.rect(screen, color, (cx, y + h // 3 - sep_sz // 2, sep_sz, sep_sz))
-                    pygame.draw.rect(screen, color, (cx, y + 2 * h // 3 - sep_sz // 2, sep_sz, sep_sz))
-                else:
-                    pygame.draw.rect(screen, color, (cx, y + h - sep_sz, sep_sz, sep_sz))
-                cx += sep_sz + gap
 
     def _draw_selector(self, screen, y, h, x=35, w=None):
         if w is None:
@@ -454,13 +393,10 @@ class BombDefusalMode(GameMode):
                 self.phase = "setup_modules"
 
     def _handle_setup_custom(self, actions):
-        if "UP" in actions:
-            self.custom_minutes = min(99, self.custom_minutes + 1)
-        if "DOWN" in actions:
-            self.custom_minutes = max(1, self.custom_minutes - 1)
-        if "RED_BUTTON" in actions:
+        self.custom_minutes, result = handle_custom_timer(actions, self.custom_minutes)
+        if result == "back":
             self.phase = "setup_timer"
-        if "START" in actions or "GREEN_BUTTON" in actions:
+        elif result == "confirm":
             self.timer_total = self.custom_minutes * 60
             self.timer_remaining = self.timer_total
             self.phase = "setup_modules"
@@ -711,22 +647,10 @@ class BombDefusalMode(GameMode):
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_setup_custom(self, screen):
-        title = self.font_big.render("BOMB DEFUSAL SETUP", True, COLORS["yellow"])
-        screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
-
-        sub = self.font_sm.render("Set custom time", True, COLORS["white"])
-        screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=110))
-
-        val = self.font_big.render(f"{self.custom_minutes:02d}:00", True, COLORS["green"])
-        screen.blit(val, val.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 10)))
-
-        label = self.font_sm.render("MINUTES", True, COLORS["grey"])
-        screen.blit(label, label.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT // 2 + 50))
-
-        hints = self.font_sm.render(
-            "UP/DOWN=adjust  START/GREEN=confirm  RED=back", True, COLORS["grey"]
+        draw_custom_timer(
+            screen, self.font_big, self.font_sm, "BOMB DEFUSAL SETUP",
+            self.custom_minutes,
         )
-        screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_setup_modules(self, screen):
         title = self.font_big.render("BOMB DEFUSAL SETUP", True, COLORS["yellow"])
@@ -758,9 +682,11 @@ class BombDefusalMode(GameMode):
         screen.blit(serial_surf, serial_surf.get_rect(right=SCREEN_WIDTH - 15, y=8))
 
         # 7-segment timer (centered)
-        timer_w = 8 * 28 + 7 * 6 + 2 * (5 + 6)
+        timer_w = seg7_width(w=28, thick=5, gap=5)
         timer_x = (SCREEN_WIDTH - timer_w) // 2
-        self._draw_7seg_timer(screen, timer_x, 16, self.timer_remaining, w=28, h=52, thick=5, gap=5)
+        timer_color = COLORS["red"] if self.timer_remaining < 120 else COLORS["green"]
+        draw_7seg_time(screen, timer_x, 16, self.timer_remaining, timer_color,
+                       w=28, h=52, thick=5, gap=5)
 
         pygame.draw.line(screen, DIM_RED, (0, 90), (SCREEN_WIDTH, 90))
 
@@ -1090,7 +1016,7 @@ class BombDefusalMode(GameMode):
     def _save_history(self):
         self.play_end_time = time.time()
         elapsed = self.play_end_time - self.play_start_time
-        entry = {
+        self.save_history({
             "timestamp": time.strftime("%Y-%m-%d %H:%M"),
             "result": self.result,
             "elapsed_seconds": round(elapsed),
@@ -1098,22 +1024,4 @@ class BombDefusalMode(GameMode):
             "modules_total": len(self.modules),
             "modules_solved": sum(1 for m in self.modules if m["solved"]),
             "timer_preset": self.timer_total,
-        }
-        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        history = []
-        if HISTORY_FILE.exists():
-            try:
-                history = json.loads(HISTORY_FILE.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-        history.append(entry)
-        HISTORY_FILE.write_text(json.dumps(history, indent=2))
-
-    @staticmethod
-    def load_history():
-        if HISTORY_FILE.exists():
-            try:
-                return json.loads(HISTORY_FILE.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-        return []
+        })
