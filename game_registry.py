@@ -1,5 +1,15 @@
 """Registry of available game modes and their configurable settings."""
 
+TIMER_OPTIONS = [
+    {"label": "5 MIN", "value": 300},
+    {"label": "10 MIN", "value": 600},
+    {"label": "15 MIN", "value": 900},
+    {"label": "20 MIN", "value": 1200},
+    {"label": "25 MIN", "value": 1500},
+    {"label": "30 MIN", "value": 1800},
+    {"label": "CUSTOM", "value": -1},
+]
+
 GAME_MODES = {
     "comms_hack": {
         "name": "Comms Array Hack",
@@ -8,15 +18,10 @@ GAME_MODES = {
             "timer": {
                 "label": "Timer",
                 "type": "choice",
-                "options": [
-                    {"label": "OFF", "value": 0},
-                    {"label": "3 MIN", "value": 180},
-                    {"label": "5 MIN", "value": 300},
-                    {"label": "10 MIN", "value": 600},
-                    {"label": "15 MIN", "value": 900},
-                    {"label": "20 MIN", "value": 1200},
-                ],
+                "options": [{"label": "OFF", "value": 0}] + TIMER_OPTIONS,
                 "default": 300,
+                "custom_min": 1,
+                "custom_max": 99,
             }
         },
     },
@@ -27,11 +32,10 @@ GAME_MODES = {
             "timer": {
                 "label": "Timer",
                 "type": "choice",
-                "options": [
-                    {"label": f"{10 + i*5} MIN", "value": (10 + i*5) * 60}
-                    for i in range(11)
-                ],
+                "options": TIMER_OPTIONS,
                 "default": 900,
+                "custom_min": 1,
+                "custom_max": 99,
             },
             "modules": {
                 "label": "Modules",
@@ -53,12 +57,10 @@ GAME_MODES = {
             "goal_time": {
                 "label": "Goal Time",
                 "type": "choice",
-                "options": [
-                    {"label": "5 MIN", "value": 300},
-                    {"label": "10 MIN", "value": 600},
-                    {"label": "15 MIN", "value": 900},
-                ],
+                "options": TIMER_OPTIONS,
                 "default": 600,
+                "custom_min": 1,
+                "custom_max": 99,
             }
         },
     },

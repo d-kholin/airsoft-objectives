@@ -28,11 +28,13 @@ HISTORY_FILE = Path(__file__).parent.parent / "data" / "comms_hack_history.json"
 CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 TIMER_PRESETS = [
     ("OFF", 0),
-    ("3 MIN", 180),
     ("5 MIN", 300),
     ("10 MIN", 600),
     ("15 MIN", 900),
     ("20 MIN", 1200),
+    ("25 MIN", 1500),
+    ("30 MIN", 1800),
+    ("CUSTOM", None),
 ]
 
 DIM_GREEN = (0, 90, 35)
@@ -68,6 +70,7 @@ class CommsHackMode(GameMode):
         self.current_code = []
         self.char_index = 0
         self.timer_selection = 0
+        self.custom_minutes = 10
         self.timer_total = 0
         self.timer_remaining = 0
         self.matched = [False, False, False]
@@ -112,6 +115,8 @@ class CommsHackMode(GameMode):
             self._handle_setup_phone(actions)
         elif self.phase == "setup_timer":
             self._handle_setup_timer(actions)
+        elif self.phase == "setup_custom":
+            self._handle_setup_custom(actions)
         elif self.phase == "play":
             self._handle_play(actions)
         elif self.phase == "result":
@@ -165,14 +170,31 @@ class CommsHackMode(GameMode):
         if "DOWN" in actions:
             self.timer_selection = (self.timer_selection + 1) % len(TIMER_PRESETS)
         if "START" in actions or "GREEN_BUTTON" in actions:
-            self.timer_total = TIMER_PRESETS[self.timer_selection][1]
-            self.timer_remaining = self.timer_total
-            self.input_chars = []
-            self.input_char_index = 0
-            self.phase = "play"
-            self.play_start_time = time.time()
-            self.failed_attempts = 0
-            self.app.sound.play("confirm")
+            preset = TIMER_PRESETS[self.timer_selection][1]
+            if preset is None:
+                self.phase = "setup_custom"
+            else:
+                self._start_play(preset)
+
+    def _handle_setup_custom(self, actions):
+        if "UP" in actions:
+            self.custom_minutes = min(99, self.custom_minutes + 1)
+        if "DOWN" in actions:
+            self.custom_minutes = max(1, self.custom_minutes - 1)
+        if "RED_BUTTON" in actions:
+            self.phase = "setup_timer"
+        if "START" in actions or "GREEN_BUTTON" in actions:
+            self._start_play(self.custom_minutes * 60)
+
+    def _start_play(self, timer_seconds):
+        self.timer_total = timer_seconds
+        self.timer_remaining = self.timer_total
+        self.input_chars = []
+        self.input_char_index = 0
+        self.phase = "play"
+        self.play_start_time = time.time()
+        self.failed_attempts = 0
+        self.app.sound.play("confirm")
 
     def _handle_play(self, actions):
         if "UP" in actions:
@@ -256,6 +278,8 @@ class CommsHackMode(GameMode):
             self._draw_setup_phone(screen)
         elif self.phase == "setup_timer":
             self._draw_setup_timer(screen)
+        elif self.phase == "setup_custom":
+            self._draw_setup_custom(screen)
         elif self.phase == "play":
             self._draw_play(screen)
         elif self.phase == "decrypting":
@@ -352,14 +376,35 @@ class CommsHackMode(GameMode):
         title = self.font_big.render("SET TIMER", True, COLORS["yellow"])
         screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
 
+        col_x = [200, 560]
+        row_h = 55
+        top = 110
+        per_col = (len(TIMER_PRESETS) + 1) // 2
         for i, (label, _secs) in enumerate(TIMER_PRESETS):
-            draw_menu_item(
-                screen, self.font_med, label,
-                i == self.timer_selection, SCREEN_WIDTH // 2 - 100, 120 + i * 50,
-            )
+            x = col_x[i // per_col]
+            y = top + (i % per_col) * row_h
+            draw_menu_item(screen, self.font_med, label, i == self.timer_selection, x, y)
 
         hints = self.font_sm.render(
             "UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"]
+        )
+        screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
+
+    def _draw_setup_custom(self, screen):
+        title = self.font_big.render("SET TIMER", True, COLORS["yellow"])
+        screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
+
+        sub = self.font_sm.render("Set custom time", True, COLORS["white"])
+        screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=110))
+
+        val = self.font_big.render(f"{self.custom_minutes:02d}:00", True, COLORS["green"])
+        screen.blit(val, val.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 10)))
+
+        label = self.font_sm.render("MINUTES", True, COLORS["grey"])
+        screen.blit(label, label.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT // 2 + 50))
+
+        hints = self.font_sm.render(
+            "UP/DOWN=adjust  START/GREEN=confirm  RED=back", True, COLORS["grey"]
         )
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 

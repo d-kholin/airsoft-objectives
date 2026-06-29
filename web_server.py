@@ -265,6 +265,20 @@ function buildSettings() {
       sel.appendChild(o);
     });
     div.appendChild(sel);
+
+    if (setting.custom_min !== undefined) {
+      const customDiv = document.createElement('div');
+      customDiv.id = `custom-${key}`;
+      customDiv.style.display = 'none';
+      customDiv.innerHTML = `<label>Custom (minutes)</label>
+        <input type="number" id="custom-val-${key}" min="${setting.custom_min}" max="${setting.custom_max}" value="10"
+        style="width:100%;padding:10px;font-family:'Courier New',monospace;font-size:1.1em;background:#0a0a0f;color:#00c850;border:1px solid #005a24;border-radius:4px;margin-bottom:10px;">`;
+      div.appendChild(customDiv);
+      sel.addEventListener('change', () => {
+        customDiv.style.display = sel.value === '-1' ? '' : 'none';
+      });
+    }
+
     container.appendChild(div);
   });
 }
@@ -273,7 +287,12 @@ function getSettings() {
   const settings = {};
   document.querySelectorAll('#settings-fields select').forEach(sel => {
     const key = sel.id.replace('setting-', '');
-    settings[key] = parseInt(sel.value);
+    let val = parseInt(sel.value);
+    if (val === -1) {
+      const customInput = document.getElementById(`custom-val-${key}`);
+      if (customInput) val = parseInt(customInput.value) * 60;
+    }
+    settings[key] = val;
   });
   return settings;
 }

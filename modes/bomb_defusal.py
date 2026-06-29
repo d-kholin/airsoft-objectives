@@ -11,18 +11,13 @@ from ui import draw_menu_item
 HISTORY_FILE = Path(__file__).parent.parent / "data" / "bomb_defusal_history.json"
 
 TIMER_PRESETS = [
-    ("CUSTOM", None),
+    ("5 MIN", 300),
     ("10 MIN", 600),
     ("15 MIN", 900),
     ("20 MIN", 1200),
     ("25 MIN", 1500),
     ("30 MIN", 1800),
-    ("35 MIN", 2100),
-    ("40 MIN", 2400),
-    ("45 MIN", 2700),
-    ("50 MIN", 3000),
-    ("55 MIN", 3300),
-    ("60 MIN", 3600),
+    ("CUSTOM", None),
 ]
 
 MODULE_PRESETS = [
@@ -354,7 +349,7 @@ class BombDefusalMode(GameMode):
         self.font_med = pygame.font.Font(None, 48)
         self.font_sm = pygame.font.Font(None, 36)
         self.font_mono = pygame.font.Font(None, 28)
-        self.timer_selection = 1
+        self.timer_selection = 2
         self.custom_minutes = 10
         self.module_selection = 0
         self.setup_step = "timer"
