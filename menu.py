@@ -144,8 +144,8 @@ class MenuMode(GameMode):
             if is_dom:
                 result_color = (255, 40, 40) if result == "RED" else (40, 100, 255)
             elif is_missile:
-                # Defenders win (green) on abort or timeout; launch is red.
-                result_color = COLORS["green"] if result in ("ABORTED", "TIMEOUT") else COLORS["red"]
+                # LAUNCHED = defenders win (green); all others = attackers win (red).
+                result_color = COLORS["green"] if result == "LAUNCHED" else COLORS["red"]
             else:
                 result_color = COLORS["green"] if result == "VICTORY" else COLORS["red"]
 

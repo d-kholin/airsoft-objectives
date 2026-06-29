@@ -541,7 +541,7 @@ function loadHistory() {
         const mins = Math.floor((e.elapsed_seconds||0)/60);
         const secs = (e.elapsed_seconds||0)%60;
         const r = (e.result||'?').toUpperCase();
-        const rc = (r === 'ABORTED' || r === 'TIMEOUT') ? '#00c850' : '#ff2828';
+        const rc = r === 'LAUNCHED' ? '#00c850' : '#ff2828';
         const tl = e.time_left||0;
         html += `<tr><td ${td}>${e.timestamp||'?'}</td>
           <td ${td} style="color:${rc}">${r}</td>

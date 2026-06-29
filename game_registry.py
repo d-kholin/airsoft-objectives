@@ -82,8 +82,8 @@ GAME_MODES = {
                 "default": 120,
                 **_CUSTOM,
             },
-            "disarm_hold": {
-                "label": "Disarm Hold",
+            "hold_time": {
+                "label": "Hold Time (per phase / abort)",
                 "type": "choice",
                 "options": DISARM_OPTIONS,
                 "default": 15,

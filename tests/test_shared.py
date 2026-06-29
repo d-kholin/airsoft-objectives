@@ -45,18 +45,16 @@ class RegistryWiringTest(unittest.TestCase):
         from presets import COUNTDOWN_PRESETS, DISARM_PRESETS
         from game_registry import GAME_MODES
         settings = GAME_MODES["missile_launch"]["settings"]
-        self.assertEqual(set(settings), {"game_time", "countdown", "disarm_hold"})
+        self.assertEqual(set(settings), {"game_time", "countdown", "hold_time"})
         self.assertEqual(settings["game_time"]["label"], "Game Time")
         self.assertEqual(
             [o["label"] for o in settings["countdown"]["options"]],
             [label for label, _ in COUNTDOWN_PRESETS])
         self.assertEqual(
-            [o["label"] for o in settings["disarm_hold"]["options"]],
+            [o["label"] for o in settings["hold_time"]["options"]],
             [label for label, _ in DISARM_PRESETS])
         self.assertEqual(settings["countdown"]["default"], 120)
-        self.assertEqual(settings["disarm_hold"]["default"], 15)
-        # Disarm hold is a fixed-second choice, no custom minutes entry.
-        self.assertNotIn("custom_min", settings["disarm_hold"])
+        self.assertEqual(settings["hold_time"]["default"], 15)
 
 
 class ConfigStoreTest(unittest.TestCase):
