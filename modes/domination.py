@@ -2,7 +2,7 @@ import pygame
 import math
 import random
 from game_mode import GameMode, GameState
-from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
+from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT, BUTTON_MAP
 from ui import draw_menu_item
 import json
 import time
@@ -57,7 +57,14 @@ class DominationMode(GameMode):
         self.anim_time = 0.0
         self.soldiers = self._init_soldiers()
         self.projectiles = []
+        self.action_keys = {}
+        for key, action in BUTTON_MAP.items():
+            self.action_keys.setdefault(action, []).append(key)
         self.state = GameState.RUNNING
+
+    def _is_held(self, action):
+        pressed = pygame.key.get_pressed()
+        return any(pressed[k] for k in self.action_keys.get(action, []))
 
     def _init_soldiers(self):
         soldiers = []
@@ -97,22 +104,47 @@ class DominationMode(GameMode):
             self.play_start_time = time.time()
 
     def _handle_play(self, actions):
-        if "RED_BUTTON" in actions and self.owner != "RED" and self.capturing_team != "RED":
-            self.capturing_team = "RED"
-            self.capture_progress = 0.0
-        if "BLUE_BUTTON" in actions and self.owner != "BLUE" and self.capturing_team != "BLUE":
-            self.capturing_team = "BLUE"
-            self.capture_progress = 0.0
+        # Capture is driven by held-button state in update(), not single taps.
+        pass
+
+    def _update_capture(self, dt):
+        # A team captures only while it holds its button. Release lets the
+        # meter retreat at the same rate; if it drains to zero the attempt is
+        # abandoned and the point reverts to neutral (or its prior owner).
+        red_held = self._is_held("RED_BUTTON")
+        blue_held = self._is_held("BLUE_BUTTON")
+
+        if self.capturing_team is None:
+            if red_held and self.owner != "RED":
+                self.capturing_team = "RED"
+                self.capture_progress = 0.0
+            elif blue_held and self.owner != "BLUE":
+                self.capturing_team = "BLUE"
+                self.capture_progress = 0.0
+
+        if self.capturing_team is None:
+            return
+
+        holding = red_held if self.capturing_team == "RED" else blue_held
+        if holding:
+            self.capture_progress += dt
+            if self.capture_progress >= CAPTURE_TIME:
+                self.owner = self.capturing_team
+                self.capturing_team = None
+                self.capture_progress = 0.0
+                self.app.sound.play("confirm")
+        else:
+            self.capture_progress -= dt
+            if self.capture_progress <= 0:
+                self.capture_progress = 0.0
+                self.capturing_team = None
+                # An abandoned capture leaves the point neutral — the previous
+                # owner no longer holds it and stops scoring.
+                self.owner = None
 
     def update(self, dt):
         if self.phase == "play":
-            if self.capturing_team:
-                self.capture_progress += dt
-                if self.capture_progress >= CAPTURE_TIME:
-                    self.owner = self.capturing_team
-                    self.capturing_team = None
-                    self.capture_progress = 0.0
-                    self.app.sound.play("confirm")
+            self._update_capture(dt)
 
             if self.capturing_team:
                 pass
@@ -474,7 +506,7 @@ class DominationMode(GameMode):
 
         # Controls hint
         hint = self.font_mono.render(
-            "RED button = claim for RED    BLUE button = claim for BLUE",
+            "HOLD RED button to capture for RED    HOLD BLUE button for BLUE",
             True, COLORS["grey"],
         )
         screen.blit(hint, hint.get_rect(centerx=mid, y=SCREEN_HEIGHT - 25))
