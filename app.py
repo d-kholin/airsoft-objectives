@@ -105,7 +105,7 @@ class App:
             phase = getattr(mode, "phase", "unknown")
             if phase == "result":
                 status = "finished"
-            elif phase in ("play", "decrypting"):
+            elif phase in ("play", "decrypting", "countdown"):
                 status = "running"
             else:
                 status = "setup"

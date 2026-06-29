@@ -3,6 +3,8 @@
 from presets import (
     CUSTOM_MIN_MINUTES,
     CUSTOM_MAX_MINUTES,
+    COUNTDOWN_PRESETS,
+    DISARM_PRESETS,
     MODULE_PRESETS,
     registry_options,
     timer_presets,
@@ -11,6 +13,8 @@ from presets import (
 TIMER_OPTIONS = registry_options(timer_presets())
 TIMER_OPTIONS_WITH_OFF = registry_options(timer_presets(include_off=True))
 MODULE_OPTIONS = registry_options(MODULE_PRESETS)
+COUNTDOWN_OPTIONS = registry_options(COUNTDOWN_PRESETS)
+DISARM_OPTIONS = registry_options(DISARM_PRESETS)
 
 _CUSTOM = {"custom_min": CUSTOM_MIN_MINUTES, "custom_max": CUSTOM_MAX_MINUTES}
 
@@ -60,6 +64,32 @@ GAME_MODES = {
             }
         },
     },
+    "missile_launch": {
+        "name": "Missile Launch",
+        "description": "Enter launch codes to start the countdown — the enemy must reach the box and abort",
+        "settings": {
+            "game_time": {
+                "label": "Game Time",
+                "type": "choice",
+                "options": TIMER_OPTIONS,
+                "default": 900,
+                **_CUSTOM,
+            },
+            "countdown": {
+                "label": "Launch Countdown",
+                "type": "choice",
+                "options": COUNTDOWN_OPTIONS,
+                "default": 120,
+                **_CUSTOM,
+            },
+            "disarm_hold": {
+                "label": "Disarm Hold",
+                "type": "choice",
+                "options": DISARM_OPTIONS,
+                "default": 15,
+            },
+        },
+    },
 }
 
 
@@ -79,6 +109,9 @@ def get_mode_class(mode_id):
     elif mode_id == "domination":
         from modes.domination import DominationMode
         return DominationMode
+    elif mode_id == "missile_launch":
+        from modes.missile_launch import MissileLaunchMode
+        return MissileLaunchMode
     return None
 
 

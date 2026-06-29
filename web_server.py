@@ -157,6 +157,17 @@ INDEX_PAGE = """
     </div>
   </div>
 
+  <!-- Step 3b: Launch code (missile only) -->
+  <div class="step" id="step-launchcode">
+    <p style="color:#787878;font-size:0.85em;margin-bottom:12px;">Set the launch code the attacking team must bring to the box and enter.</p>
+    <div id="current-launchcode-display"></div>
+    <div class="code-row"><span class="code-num">#</span><input type="text" id="launchcode" placeholder="e.g. ALPHA1" maxlength="20"></div>
+    <div class="nav-row" style="margin-top:4px;">
+      <button class="btn-outline" onclick="wizardBack()">BACK</button>
+      <button class="btn-green" onclick="saveLaunchCodeAndNext()">NEXT</button>
+    </div>
+  </div>
+
   <!-- Step 4: Confirm & Launch -->
   <div class="step" id="step-confirm">
     <div id="confirm-summary" style="margin-bottom:12px;"></div>
@@ -193,6 +204,8 @@ function buildSteps() {
   wizSteps = ['step-mode', 'step-settings', 'step-confirm'];
   if (selectedMode === 'comms_hack') {
     wizSteps = ['step-mode', 'step-settings', 'step-codes', 'step-confirm'];
+  } else if (selectedMode === 'missile_launch') {
+    wizSteps = ['step-mode', 'step-settings', 'step-launchcode', 'step-confirm'];
   }
 }
 
@@ -205,6 +218,7 @@ function showStep() {
     if (s === 'step-mode') return 'MODE';
     if (s === 'step-settings') return 'SETTINGS';
     if (s === 'step-codes') return 'CODES';
+    if (s === 'step-launchcode') return 'CODE';
     if (s === 'step-confirm') return 'LAUNCH';
     return '?';
   });
@@ -229,6 +243,7 @@ function wizardNext() {
     if (wizSteps[wizStep] === 'step-confirm' - 1) buildSummary();
     wizStep++;
     if (wizSteps[wizStep] === 'step-codes') loadCurrentCodes();
+    if (wizSteps[wizStep] === 'step-launchcode') loadLaunchCode();
     if (wizSteps[wizStep] === 'step-confirm') buildSummary();
     showStep();
   }
@@ -325,6 +340,41 @@ function saveCodes() {
   });
 }
 
+function loadLaunchCode() {
+  fetch('/api/launch_code').then(r => r.json()).then(data => {
+    const container = document.getElementById('current-launchcode-display');
+    if (data.launch_code) {
+      container.innerHTML = '<p style="color:#787878;font-size:0.85em;margin-bottom:8px;">Current code:</p>' +
+        `<div class="display">LAUNCH CODE: ${data.launch_code}</div>`;
+      document.getElementById('launchcode').value = data.launch_code;
+    } else {
+      container.innerHTML = '<div class="display empty">No launch code set yet</div>';
+    }
+  });
+}
+
+function saveLaunchCode() {
+  const code = document.getElementById('launchcode').value.toUpperCase().trim();
+  if (!code) return Promise.resolve(false);
+  return fetch('/api/launch_code', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({launch_code: code})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) { toast('Launch code saved', true); loadLaunchCode(); }
+    else toast(data.error || 'Failed', false);
+    return data.ok;
+  });
+}
+
+function saveLaunchCodeAndNext() {
+  const code = document.getElementById('launchcode').value.toUpperCase().trim();
+  if (!code) { toast('Launch code is required', false); return; }
+  saveLaunchCode().then(ok => { if (ok) wizardNext(); });
+}
+
 function buildSummary() {
   const mode = allModes[selectedMode];
   const settings = getSettings();
@@ -345,28 +395,42 @@ function buildSummary() {
     } else {
       html += '<div class="display empty">Codes not set — will use manual entry on box</div>';
     }
+  } else if (selectedMode === 'missile_launch') {
+    const code = document.getElementById('launchcode').value.toUpperCase().trim();
+    if (code) {
+      html += `<div class="display">LAUNCH CODE: ${code}</div>`;
+    } else {
+      html += '<div class="display empty">Code not set — will use manual entry on box</div>';
+    }
   }
   document.getElementById('confirm-summary').innerHTML = html;
 }
 
 function launchGame() {
   const settings = getSettings();
-  fetch('/api/queue', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({mode: selectedMode, settings: settings, force: true})
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.ok) {
-      toast('Game started', true);
-      wizStep = 0;
-      selectedMode = null;
-      buildSteps();
-      showStep();
-      refreshState();
-    } else toast(data.error || 'Failed', false);
-  });
+  const doQueue = () => {
+    fetch('/api/queue', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode: selectedMode, settings: settings, force: true})
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        toast('Game started', true);
+        wizStep = 0;
+        selectedMode = null;
+        buildSteps();
+        showStep();
+        refreshState();
+      } else toast(data.error || 'Failed', false);
+    });
+  };
+  if (selectedMode === 'missile_launch') {
+    const code = document.getElementById('launchcode').value.toUpperCase().trim();
+    if (code) { saveLaunchCode().then(doQueue); return; }
+  }
+  doQueue();
 }
 
 // --- State ---
@@ -469,6 +533,21 @@ function loadHistory() {
           <td ${td}>${mins}m${String(secs).padStart(2,'0')}s</td>
           <td ${td}>${Math.floor(rt/60)}:${String(rt%60).padStart(2,'0')}</td>
           <td ${td}>${Math.floor(bt/60)}:${String(bt%60).padStart(2,'0')}</td></tr>`;
+      });
+    } else if (modeId === 'missile_launch') {
+      html += `<tr style="color:#00c850;border-bottom:1px solid #005a24;">
+        <th ${th}>Date</th><th ${th}>Outcome</th><th ${th}>Time</th><th ${th}>Failed</th><th ${th}>T-Left</th></tr>`;
+      entries.forEach(e => {
+        const mins = Math.floor((e.elapsed_seconds||0)/60);
+        const secs = (e.elapsed_seconds||0)%60;
+        const r = (e.result||'?').toUpperCase();
+        const rc = (r === 'ABORTED' || r === 'TIMEOUT') ? '#00c850' : '#ff2828';
+        const tl = e.time_left||0;
+        html += `<tr><td ${td}>${e.timestamp||'?'}</td>
+          <td ${td} style="color:${rc}">${r}</td>
+          <td ${td}>${mins}m${String(secs).padStart(2,'0')}s</td>
+          <td ${td}>${e.failed_attempts||0}</td>
+          <td ${td}>${Math.floor(tl/60)}:${String(tl%60).padStart(2,'0')}</td></tr>`;
       });
     } else {
       html += `<tr style="color:#00c850;border-bottom:1px solid #005a24;">
@@ -580,6 +659,24 @@ def create_app(config_store, game_controller):
     @app.route("/api/codes", methods=["DELETE"])
     def clear_codes():
         config_store.clear_codes()
+        return jsonify({"ok": True})
+
+    @app.route("/api/launch_code", methods=["GET"])
+    def get_launch_code():
+        return jsonify({"launch_code": config_store.get_launch_code()})
+
+    @app.route("/api/launch_code", methods=["POST"])
+    def set_launch_code():
+        data = request.get_json(silent=True) or {}
+        code = (data.get("launch_code") or "").strip().upper()
+        if not code:
+            return jsonify({"ok": False, "error": "Launch code required"}), 400
+        config_store.set_launch_code(code)
+        return jsonify({"ok": True})
+
+    @app.route("/api/launch_code", methods=["DELETE"])
+    def clear_launch_code():
+        config_store.clear_launch_code()
         return jsonify({"ok": True})
 
     @app.route("/api/history")

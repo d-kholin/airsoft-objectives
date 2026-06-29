@@ -22,6 +22,27 @@ MODULE_PRESETS = [
     ("6 MODULES", 6),
 ]
 
+# Countdown lengths for Missile Launch (shorter and starting lower than the
+# objective timers, since it is an active firefight window).
+COUNTDOWN_PRESETS = [
+    ("1 MIN", 60),
+    ("2 MIN", 120),
+    ("3 MIN", 180),
+    ("5 MIN", 300),
+    ("CUSTOM", None),
+]
+
+# How long the abort button must be held to disarm a launch (seconds).
+DISARM_PRESETS = [
+    ("5 SEC", 5),
+    ("10 SEC", 10),
+    ("15 SEC", 15),
+    ("20 SEC", 20),
+    ("30 SEC", 30),
+    ("45 SEC", 45),
+    ("60 SEC", 60),
+]
+
 CUSTOM_MIN_MINUTES = 1
 CUSTOM_MAX_MINUTES = 99
 

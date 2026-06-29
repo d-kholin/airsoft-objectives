@@ -95,6 +95,7 @@ class MenuMode(GameMode):
 
         is_bomb = self.history_data and "strikes" in self.history_data[0]
         is_dom = self.history_data and "red_hold_time" in self.history_data[0]
+        is_missile = self.history_data and "countdown_total" in self.history_data[0]
 
         # Column x-positions derived from the monospace cell width, so the
         # header and every data row line up by construction.
@@ -111,6 +112,8 @@ class MenuMode(GameMode):
             label_result, label_4, label_5 = "RESULT", "STRIKES", "MODULES"
         elif is_dom:
             label_result, label_4, label_5 = "WINNER", "RED", "BLUE"
+        elif is_missile:
+            label_result, label_4, label_5 = "OUTCOME", "FAILED", "T-LEFT"
         else:
             label_result, label_4, label_5 = "RESULT", "FAILED", "CODES"
 
@@ -140,6 +143,9 @@ class MenuMode(GameMode):
             result = entry.get("result", "?").upper()
             if is_dom:
                 result_color = (255, 40, 40) if result == "RED" else (40, 100, 255)
+            elif is_missile:
+                # Defenders win (green) on abort or timeout; launch is red.
+                result_color = COLORS["green"] if result in ("ABORTED", "TIMEOUT") else COLORS["red"]
             else:
                 result_color = COLORS["green"] if result == "VICTORY" else COLORS["red"]
 
@@ -153,6 +159,10 @@ class MenuMode(GameMode):
                 bt = entry.get("blue_hold_time", 0)
                 v4 = f"{rt // 60}:{rt % 60:02d}"
                 v5 = f"{bt // 60}:{bt % 60:02d}"
+            elif is_missile:
+                tl = entry.get("time_left", 0)
+                v4 = str(entry.get("failed_attempts", 0))
+                v5 = f"{tl // 60}:{tl % 60:02d}"
             else:
                 v4 = str(entry.get("failed_attempts", 0))
                 v5 = f"{entry.get('codes_unlocked', 0)}/3"

@@ -8,7 +8,7 @@ CONFIG_FILE = Path(__file__).parent / "data" / "comms_config.json"
 class ConfigStore:
     def __init__(self):
         self._lock = threading.Lock()
-        self._data = {"codes": [], "pin": "1234"}
+        self._data = {"codes": [], "pin": "1234", "launch_code": ""}
         self._load()
 
     def _load(self):
@@ -44,4 +44,18 @@ class ConfigStore:
     def set_pin(self, pin):
         with self._lock:
             self._data["pin"] = pin
+            self._save()
+
+    def get_launch_code(self):
+        with self._lock:
+            return self._data.get("launch_code", "")
+
+    def set_launch_code(self, code):
+        with self._lock:
+            self._data["launch_code"] = code
+            self._save()
+
+    def clear_launch_code(self):
+        with self._lock:
+            self._data["launch_code"] = ""
             self._save()

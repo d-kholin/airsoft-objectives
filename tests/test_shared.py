@@ -34,6 +34,45 @@ class PresetsTest(unittest.TestCase):
         self.assertEqual(CUSTOM_MAX_MINUTES, 99)
 
 
+class RegistryWiringTest(unittest.TestCase):
+    def test_every_registered_mode_resolves_to_a_class(self):
+        from game_registry import list_modes, get_mode_class
+        for mode_id in list_modes():
+            self.assertIsNotNone(get_mode_class(mode_id),
+                                 msg=f"{mode_id} has no class mapping")
+
+    def test_missile_has_all_three_timer_settings(self):
+        from presets import COUNTDOWN_PRESETS, DISARM_PRESETS
+        from game_registry import GAME_MODES
+        settings = GAME_MODES["missile_launch"]["settings"]
+        self.assertEqual(set(settings), {"game_time", "countdown", "disarm_hold"})
+        self.assertEqual(settings["game_time"]["label"], "Game Time")
+        self.assertEqual(
+            [o["label"] for o in settings["countdown"]["options"]],
+            [label for label, _ in COUNTDOWN_PRESETS])
+        self.assertEqual(
+            [o["label"] for o in settings["disarm_hold"]["options"]],
+            [label for label, _ in DISARM_PRESETS])
+        self.assertEqual(settings["countdown"]["default"], 120)
+        self.assertEqual(settings["disarm_hold"]["default"], 15)
+        # Disarm hold is a fixed-second choice, no custom minutes entry.
+        self.assertNotIn("custom_min", settings["disarm_hold"])
+
+
+class ConfigStoreTest(unittest.TestCase):
+    def test_launch_code_round_trip(self):
+        from config_store import ConfigStore
+        store = ConfigStore()
+        original = store.get_launch_code()
+        try:
+            store.set_launch_code("ALPHA7")
+            self.assertEqual(store.get_launch_code(), "ALPHA7")
+            store.clear_launch_code()
+            self.assertEqual(store.get_launch_code(), "")
+        finally:
+            store.set_launch_code(original)
+
+
 class HistoryTest(unittest.TestCase):
     MODE = "unittest_tmp_mode"
 
