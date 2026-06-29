@@ -6,6 +6,7 @@ from presets import (
     COUNTDOWN_PRESETS,
     DISARM_PRESETS,
     MODULE_PRESETS,
+    PHASE_PRESETS,
     registry_options,
     timer_presets,
 )
@@ -15,6 +16,7 @@ TIMER_OPTIONS_WITH_OFF = registry_options(timer_presets(include_off=True))
 MODULE_OPTIONS = registry_options(MODULE_PRESETS)
 COUNTDOWN_OPTIONS = registry_options(COUNTDOWN_PRESETS)
 DISARM_OPTIONS = registry_options(DISARM_PRESETS)
+PHASE_OPTIONS = registry_options(PHASE_PRESETS)
 
 _CUSTOM = {"custom_min": CUSTOM_MIN_MINUTES, "custom_max": CUSTOM_MAX_MINUTES}
 
@@ -66,7 +68,7 @@ GAME_MODES = {
     },
     "missile_launch": {
         "name": "Missile Launch",
-        "description": "Enter launch codes to start the countdown — the enemy must reach the box and abort",
+        "description": "Fuel, raise, and arm the missile — then enter launch codes before the enemy stops you",
         "settings": {
             "game_time": {
                 "label": "Game Time",
@@ -75,18 +77,33 @@ GAME_MODES = {
                 "default": 900,
                 **_CUSTOM,
             },
+            "fuel_time": {
+                "label": "Fuel Duration",
+                "type": "choice",
+                "options": PHASE_OPTIONS,
+                "default": 240,
+                **_CUSTOM,
+            },
+            "raise_time": {
+                "label": "Raise Duration",
+                "type": "choice",
+                "options": PHASE_OPTIONS,
+                "default": 240,
+                **_CUSTOM,
+            },
+            "arm_time": {
+                "label": "Arm Duration",
+                "type": "choice",
+                "options": PHASE_OPTIONS,
+                "default": 180,
+                **_CUSTOM,
+            },
             "countdown": {
                 "label": "Launch Countdown",
                 "type": "choice",
                 "options": COUNTDOWN_OPTIONS,
                 "default": 120,
                 **_CUSTOM,
-            },
-            "hold_time": {
-                "label": "Hold Time (per phase / abort)",
-                "type": "choice",
-                "options": DISARM_OPTIONS,
-                "default": 15,
             },
         },
     },

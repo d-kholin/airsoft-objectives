@@ -41,20 +41,20 @@ class RegistryWiringTest(unittest.TestCase):
             self.assertIsNotNone(get_mode_class(mode_id),
                                  msg=f"{mode_id} has no class mapping")
 
-    def test_missile_has_all_three_timer_settings(self):
-        from presets import COUNTDOWN_PRESETS, DISARM_PRESETS
+    def test_missile_settings(self):
+        from presets import COUNTDOWN_PRESETS, PHASE_PRESETS
         from game_registry import GAME_MODES
         settings = GAME_MODES["missile_launch"]["settings"]
-        self.assertEqual(set(settings), {"game_time", "countdown", "hold_time"})
-        self.assertEqual(settings["game_time"]["label"], "Game Time")
         self.assertEqual(
-            [o["label"] for o in settings["countdown"]["options"]],
-            [label for label, _ in COUNTDOWN_PRESETS])
-        self.assertEqual(
-            [o["label"] for o in settings["hold_time"]["options"]],
-            [label for label, _ in DISARM_PRESETS])
+            set(settings),
+            {"game_time", "fuel_time", "raise_time", "arm_time", "countdown"})
+        self.assertEqual(settings["fuel_time"]["default"], 240)
+        self.assertEqual(settings["raise_time"]["default"], 240)
+        self.assertEqual(settings["arm_time"]["default"], 180)
         self.assertEqual(settings["countdown"]["default"], 120)
-        self.assertEqual(settings["hold_time"]["default"], 15)
+        self.assertEqual(
+            [o["label"] for o in settings["fuel_time"]["options"]],
+            [label for label, _ in PHASE_PRESETS])
 
 
 class ConfigStoreTest(unittest.TestCase):

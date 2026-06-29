@@ -46,6 +46,10 @@ DISARM_PRESETS = [
 CUSTOM_MIN_MINUTES = 1
 CUSTOM_MAX_MINUTES = 99
 
+PHASE_PRESETS = [
+    (f"{m} MIN", m * 60) for m in range(1, 16)
+] + [("CUSTOM", None)]
+
 
 def timer_presets(include_off=False):
     """The timer presets as (label, seconds) tuples, optionally with OFF."""

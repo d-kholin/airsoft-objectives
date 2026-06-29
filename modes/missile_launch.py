@@ -6,7 +6,7 @@ from game_mode import GameMode
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT, BUTTON_MAP
 from ui import draw_menu_item
 from widgets import draw_7seg_time, seg7_width, handle_custom_timer, draw_custom_timer
-from presets import timer_presets, COUNTDOWN_PRESETS, DISARM_PRESETS
+from presets import timer_presets, COUNTDOWN_PRESETS, PHASE_PRESETS
 from fonts import get_font
 
 CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -14,8 +14,16 @@ CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 GAME_PRESETS = timer_presets()
 LAUNCH_PRESETS = COUNTDOWN_PRESETS
 
-PREP_PHASES = ["FUEL", "ARM", "RAISE"]
+# Phase order and registry keys.
+PREP_PHASES = [
+    ("FUEL", "fuel_time"),
+    ("RAISE", "raise_time"),
+    ("ARM", "arm_time"),
+]
+PHASE_DEFAULTS = {"fuel_time": 240, "raise_time": 240, "arm_time": 180}
 
+INITIATE_HOLD = 4.0    # seconds to hold BLUE to start a phase
+ABORT_HOLD = 15.0      # seconds to hold RED during countdown to abort
 DENIED_FLASH = 1.4
 
 AMBER = (255, 176, 0)
@@ -40,7 +48,7 @@ def _telemetry_line():
 class MissileLaunchMode(GameMode):
     name = "Missile Launch"
     mode_id = "missile_launch"
-    description = "Fuel, arm, and raise the missile — then enter launch codes before the enemy disables it"
+    description = "Fuel, raise, and arm the missile — then enter launch codes before the enemy stops you"
 
     def setup(self, config=None):
         config = config or {}
@@ -49,22 +57,30 @@ class MissileLaunchMode(GameMode):
         self.font_sm = pygame.font.Font(None, 34)
         self.font_mono = get_font(22, mono=True)
         self.font_label = get_font(26, mono=True)
-        self.font_phase = pygame.font.Font(None, 42)
+        self.font_phase = pygame.font.Font(None, 40)
 
-        self.game_total = 900
-        self.countdown_total = 120
-        self.hold_time = 15
+        # Settings
+        self.game_total = config.get("game_time", 900)
+        self.countdown_total = config.get("countdown", 120)
+        self.phase_durations = {
+            key: config.get(key, PHASE_DEFAULTS[key])
+            for _, key in PREP_PHASES
+        }
 
+        # On-box setup state
         self.game_selection = 2
         self.countdown_selection = 1
-        self.hold_selection = 2
-        self.custom_minutes = 2
+        self.phase_selections = {key: self._preset_index(key) for _, key in PREP_PHASES}
+        self.custom_minutes = 4
+        self._setup_phase_key = None   # which phase setting we're editing
 
         self.game_remaining = 0.0
 
-        # Prep phases: FUEL → ARM → RAISE
-        self.prep_phase = 0          # 0-2 = working on this phase, 3 = all done
-        self.phase_progress = 0.0    # 0..hold_time for current phase
+        # Prep state
+        self.prep_index = 0             # 0-2 = current phase, 3 = all done
+        self.init_progress = 0.0        # 0..INITIATE_HOLD
+        self.phase_remaining = 0.0      # counts down from phase duration
+        self.phase_initiated = False
 
         self.secret_chars = []
         self.secret_index = 0
@@ -75,7 +91,6 @@ class MissileLaunchMode(GameMode):
 
         self.timer_remaining = 0.0
         self.abort_progress = 0.0
-        self.disable_progress = 0.0
 
         self.result = None
         self.time_left_at_end = 0
@@ -92,10 +107,7 @@ class MissileLaunchMode(GameMode):
         for key, action in BUTTON_MAP.items():
             self.action_keys.setdefault(action, []).append(key)
 
-        if "game_time" in config or "countdown" in config or "hold_time" in config:
-            self.game_total = config.get("game_time", self.game_total)
-            self.countdown_total = config.get("countdown", self.countdown_total)
-            self.hold_time = config.get("hold_time", self.hold_time)
+        if any(k in config for _, k in PREP_PHASES) or "game_time" in config:
             code = self.app.config_store.get_launch_code()
             if code:
                 self.secret_chars = list(code)
@@ -104,6 +116,23 @@ class MissileLaunchMode(GameMode):
                 self.phase = "setup_code"
         else:
             self.phase = "setup_game_time"
+
+    def _preset_index(self, key):
+        val = self.phase_durations[key]
+        for i, (_, v) in enumerate(PHASE_PRESETS):
+            if v == val:
+                return i
+        return 3  # 4 MIN default position
+
+    def _current_phase_name(self):
+        if self.prep_index < len(PREP_PHASES):
+            return PREP_PHASES[self.prep_index][0]
+        return "READY"
+
+    def _current_phase_duration(self):
+        if self.prep_index < len(PREP_PHASES):
+            return self.phase_durations[PREP_PHASES[self.prep_index][1]]
+        return 0
 
     def _is_held(self, action):
         pressed = pygame.key.get_pressed()
@@ -124,13 +153,16 @@ class MissileLaunchMode(GameMode):
             index = (index + 1) % len(CHARSET)
         return index
 
+    # --- input -----------------------------------------------------------
+
     def handle_input(self, actions):
         handler = {
             "setup_game_time": self._handle_game_time,
             "setup_game_custom": self._handle_game_custom,
+            "setup_phase": self._handle_phase_setting,
+            "setup_phase_custom": self._handle_phase_custom,
             "setup_countdown": self._handle_countdown,
             "setup_countdown_custom": self._handle_countdown_custom,
-            "setup_hold": self._handle_hold,
             "setup_code": self._handle_setup_code,
             "code_entry": self._handle_code_entry,
         }.get(self.phase)
@@ -149,7 +181,7 @@ class MissileLaunchMode(GameMode):
                 self.phase = "setup_game_custom"
             else:
                 self.game_total = value
-                self.phase = "setup_countdown"
+                self._advance_to_phase_setting(0)
 
     def _handle_game_custom(self, actions):
         self.custom_minutes, result = handle_custom_timer(actions, self.custom_minutes)
@@ -157,18 +189,50 @@ class MissileLaunchMode(GameMode):
             self.phase = "setup_game_time"
         elif result == "confirm":
             self.game_total = self.custom_minutes * 60
+            self._advance_to_phase_setting(0)
+
+    def _advance_to_phase_setting(self, idx):
+        """Move to the setup screen for prep phase `idx`, or to countdown if done."""
+        if idx >= len(PREP_PHASES):
             self.phase = "setup_countdown"
+            return
+        _, key = PREP_PHASES[idx]
+        self._setup_phase_key = key
+        self._setup_phase_idx = idx
+        self.phase = "setup_phase"
+
+    def _handle_phase_setting(self, actions):
+        key = self._setup_phase_key
+        self.phase_selections[key], confirm = self._nav(
+            self.phase_selections[key], len(PHASE_PRESETS), actions)
+        if confirm:
+            value = PHASE_PRESETS[self.phase_selections[key]][1]
+            if value is None:
+                self.custom_minutes = self.phase_durations[key] // 60 or 4
+                self.phase = "setup_phase_custom"
+            else:
+                self.phase_durations[key] = value
+                self._advance_to_phase_setting(self._setup_phase_idx + 1)
+
+    def _handle_phase_custom(self, actions):
+        self.custom_minutes, result = handle_custom_timer(actions, self.custom_minutes)
+        key = self._setup_phase_key
+        if result == "back":
+            self.phase = "setup_phase"
+        elif result == "confirm":
+            self.phase_durations[key] = self.custom_minutes * 60
+            self._advance_to_phase_setting(self._setup_phase_idx + 1)
 
     def _handle_countdown(self, actions):
         self.countdown_selection, confirm = self._nav(self.countdown_selection, len(LAUNCH_PRESETS), actions)
         if confirm:
             value = LAUNCH_PRESETS[self.countdown_selection][1]
             if value is None:
-                self.custom_minutes = self.countdown_total // 60
+                self.custom_minutes = self.countdown_total // 60 or 2
                 self.phase = "setup_countdown_custom"
             else:
                 self.countdown_total = value
-                self.phase = "setup_hold"
+                self.phase = "setup_code"
 
     def _handle_countdown_custom(self, actions):
         self.custom_minutes, result = handle_custom_timer(actions, self.custom_minutes)
@@ -176,12 +240,6 @@ class MissileLaunchMode(GameMode):
             self.phase = "setup_countdown"
         elif result == "confirm":
             self.countdown_total = self.custom_minutes * 60
-            self.phase = "setup_hold"
-
-    def _handle_hold(self, actions):
-        self.hold_selection, confirm = self._nav(self.hold_selection, len(DISARM_PRESETS), actions)
-        if confirm:
-            self.hold_time = DISARM_PRESETS[self.hold_selection][1]
             self.phase = "setup_code"
 
     def _handle_setup_code(self, actions):
@@ -216,9 +274,10 @@ class MissileLaunchMode(GameMode):
 
     def _enter_prep(self):
         self.phase = "prep"
-        self.prep_phase = 0
-        self.phase_progress = 0.0
-        self.disable_progress = 0.0
+        self.prep_index = 0
+        self.init_progress = 0.0
+        self.phase_initiated = False
+        self.phase_remaining = float(self._current_phase_duration())
         self.game_remaining = float(self.game_total)
         self.play_start_time = time.time()
 
@@ -250,41 +309,13 @@ class MissileLaunchMode(GameMode):
                 return
 
         if self.phase == "prep":
-            blue = self._is_held("BLUE_BUTTON")
-            red = self._is_held("RED_BUTTON")
-
-            if blue and not red:
-                self.phase_progress += dt
-                if self.phase_progress >= self.hold_time:
-                    self.prep_phase += 1
-                    self.phase_progress = 0.0
-                    self.app.sound.play("confirm")
-                    if self.prep_phase >= len(PREP_PHASES):
-                        self.phase = "code_entry"
-                        self.input_chars = []
-                        self.input_index = 0
-
-            if red and not blue:
-                self.phase_progress -= dt
-                if self.phase_progress < 0:
-                    if self.prep_phase > 0:
-                        self.prep_phase -= 1
-                        self.phase_progress = self.hold_time
-                    else:
-                        self.phase_progress = 0.0
-                        self.disable_progress += dt
-                        if self.disable_progress >= self.hold_time:
-                            self._finish("DISABLED")
-                            return
-                self.disable_progress = max(0.0, self.disable_progress - dt * 0.5)
-            else:
-                self.disable_progress = max(0.0, self.disable_progress - dt * 2)
+            self._update_prep(dt)
 
         elif self.phase == "countdown":
             self.timer_remaining -= dt
             if self._is_held("RED_BUTTON"):
                 self.abort_progress += dt
-                if self.abort_progress >= self.hold_time:
+                if self.abort_progress >= ABORT_HOLD:
                     self._finish("ABORTED")
                     return
             elif self.abort_progress > 0:
@@ -297,6 +328,48 @@ class MissileLaunchMode(GameMode):
             self.pulse_time += dt
             if self.result == "LAUNCHED":
                 self.launch_anim += dt
+
+    def _update_prep(self, dt):
+        blue = self._is_held("BLUE_BUTTON")
+        red = self._is_held("RED_BUTTON")
+        dur = float(self._current_phase_duration())
+
+        if not self.phase_initiated:
+            # Initiation: hold BLUE for 4 seconds.
+            if blue and not red:
+                self.init_progress += dt
+                if self.init_progress >= INITIATE_HOLD:
+                    self.phase_initiated = True
+                    self.phase_remaining = dur
+                    self.init_progress = INITIATE_HOLD
+                    self.app.sound.play("confirm")
+            elif red:
+                self.init_progress = max(0.0, self.init_progress - dt)
+        else:
+            # Phase running: timer counts down automatically.
+            # RED reverses it; if reversed to full, phase is un-initiated.
+            if red:
+                self.phase_remaining = min(dur, self.phase_remaining + dt)
+                if self.phase_remaining >= dur:
+                    self.phase_initiated = False
+                    self.init_progress = 0.0
+            else:
+                self.phase_remaining -= dt
+                if self.phase_remaining <= 0:
+                    self.phase_remaining = 0
+                    self._complete_phase()
+
+    def _complete_phase(self):
+        self.prep_index += 1
+        self.app.sound.play("confirm")
+        if self.prep_index >= len(PREP_PHASES):
+            self.phase = "code_entry"
+            self.input_chars = []
+            self.input_index = 0
+        else:
+            self.phase_initiated = False
+            self.init_progress = 0.0
+            self.phase_remaining = float(self._current_phase_duration())
 
     def _finish(self, result):
         self.result = result
@@ -318,13 +391,19 @@ class MissileLaunchMode(GameMode):
         elif self.phase == "setup_game_custom":
             draw_custom_timer(screen, self.font_big, self.font_sm, "MISSILE LAUNCH",
                               self.custom_minutes, sub="Set custom game time (minutes)")
+        elif self.phase == "setup_phase":
+            name = PREP_PHASES[self._setup_phase_idx][0]
+            self._draw_choice(screen, f"Set {name} duration",
+                              PHASE_PRESETS, self.phase_selections[self._setup_phase_key])
+        elif self.phase == "setup_phase_custom":
+            name = PREP_PHASES[self._setup_phase_idx][0]
+            draw_custom_timer(screen, self.font_big, self.font_sm, "MISSILE LAUNCH",
+                              self.custom_minutes, sub=f"Set custom {name} duration")
         elif self.phase == "setup_countdown":
             self._draw_choice(screen, "Set launch countdown", LAUNCH_PRESETS, self.countdown_selection)
         elif self.phase == "setup_countdown_custom":
             draw_custom_timer(screen, self.font_big, self.font_sm, "MISSILE LAUNCH",
                               self.custom_minutes, sub="Set custom countdown")
-        elif self.phase == "setup_hold":
-            self._draw_choice(screen, "Set hold time (per phase / abort)", DISARM_PRESETS, self.hold_selection)
         elif self.phase == "setup_code":
             self._draw_setup_code(screen)
         elif self.phase == "prep":
@@ -372,10 +451,16 @@ class MissileLaunchMode(GameMode):
         screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=24))
         sub_surf = self.font_sm.render(sub, True, COLORS["white"])
         screen.blit(sub_surf, sub_surf.get_rect(centerx=SCREEN_WIDTH // 2, y=118))
-        x = SCREEN_WIDTH // 2 - 130
+
+        # Two-column layout for long preset lists.
+        per_col = (len(presets) + 1) // 2
+        col_x = [160, 560]
+        row_h = min(52, max(32, (SCREEN_HEIGHT - 200) // per_col))
         for i, (label, _) in enumerate(presets):
-            draw_menu_item(screen, self.font_med, label, i == selection,
-                           x, 168 + i * 52, accent=AMBER)
+            x = col_x[i // per_col]
+            y = 160 + (i % per_col) * row_h
+            draw_menu_item(screen, self.font_phase, label, i == selection,
+                           x, y, accent=AMBER)
         hints = self.font_sm.render("UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"])
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 38))
 
@@ -390,18 +475,23 @@ class MissileLaunchMode(GameMode):
             "GAME MASTER: set the secret launch code", True, COLORS["white"])
         screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=98))
         label = self.font_label.render("LAUNCH CODE:", True, AMBER)
-        screen.blit(label, (120, 230))
-        self._draw_char_entry(screen, self.secret_chars, self.secret_index, 130, 280, AMBER)
+        screen.blit(label, (120, 220))
+        self._draw_char_entry(screen, self.secret_chars, self.secret_index, 130, 270, AMBER)
+
+        durations = "   ".join(
+            f"{name} {self._fmt(self.phase_durations[key])}"
+            for name, key in PREP_PHASES)
         cfg = self.font_sm.render(
-            f"Game {self._fmt(self.game_total)}   Countdown {self._fmt(self.countdown_total)}   "
-            f"Hold {self.hold_time}s", True, COLORS["grey"])
-        screen.blit(cfg, cfg.get_rect(centerx=SCREEN_WIDTH // 2, y=410))
+            f"Game {self._fmt(self.game_total)}   {durations}   "
+            f"Countdown {self._fmt(self.countdown_total)}",
+            True, COLORS["grey"])
+        screen.blit(cfg, cfg.get_rect(centerx=SCREEN_WIDTH // 2, y=400))
+
         hints = self.font_sm.render(
             "UP/DOWN=char  GREEN=add  RED=delete  START=arm system", True, COLORS["grey"])
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 38))
 
     def _draw_missile(self, screen, cx, base_y, scale, flame, raised_pct=0.0):
-        """Draw a missile. raised_pct 0-1 controls vertical offset (raised position)."""
         offset = int(raised_pct * 60 * scale)
         base_y -= offset
         bw = int(26 * scale)
@@ -430,33 +520,45 @@ class MissileLaunchMode(GameMode):
                 (cx - fw // 3, base_y), (cx + fw // 3, base_y), (cx, base_y + int(fl * 0.6))])
 
     def _draw_phase_indicators(self, screen, y):
-        """Draw the three-phase checklist with progress bar for current phase."""
         cx = SCREEN_WIDTH // 2
         phase_w = 220
         gap = 30
         total = len(PREP_PHASES) * phase_w + (len(PREP_PHASES) - 1) * gap
         sx = cx - total // 2
 
-        for i, name in enumerate(PREP_PHASES):
+        for i, (name, key) in enumerate(PREP_PHASES):
             x = sx + i * (phase_w + gap)
             bar_h = 32
+            dur = self.phase_durations[key]
 
-            if i < self.prep_phase:
-                # Completed
+            if i < self.prep_index:
                 pygame.draw.rect(screen, COLORS["green"], (x, y, phase_w, bar_h), border_radius=4)
                 label = self.font_phase.render(f"[OK] {name}", True, COLORS["bg"])
-            elif i == self.prep_phase:
-                # In progress
-                pct = self.phase_progress / self.hold_time if self.hold_time > 0 else 0
-                pygame.draw.rect(screen, (30, 30, 40), (x, y, phase_w, bar_h), border_radius=4)
-                fill = int(phase_w * pct)
-                if fill > 0:
-                    pygame.draw.rect(screen, AMBER, (x, y, fill, bar_h), border_radius=4)
-                pygame.draw.rect(screen, AMBER, (x, y, phase_w, bar_h), 2, border_radius=4)
-                secs_left = max(0, self.hold_time - self.phase_progress)
-                label = self.font_phase.render(f"{name}  {int(secs_left)}s", True, COLORS["white"])
+            elif i == self.prep_index and self.phase in ("prep",):
+                if not self.phase_initiated:
+                    # Showing initiation progress
+                    pct = self.init_progress / INITIATE_HOLD
+                    pygame.draw.rect(screen, (30, 30, 40), (x, y, phase_w, bar_h), border_radius=4)
+                    fill = int(phase_w * pct)
+                    if fill > 0:
+                        pygame.draw.rect(screen, COLORS["yellow"], (x, y, fill, bar_h), border_radius=4)
+                    pygame.draw.rect(screen, COLORS["yellow"], (x, y, phase_w, bar_h), 2, border_radius=4)
+                    label = self.font_phase.render(f"{name}  HOLD", True, COLORS["white"])
+                else:
+                    # Timer running
+                    pct = 1.0 - (self.phase_remaining / dur) if dur > 0 else 1.0
+                    pygame.draw.rect(screen, (30, 30, 40), (x, y, phase_w, bar_h), border_radius=4)
+                    fill = int(phase_w * pct)
+                    if fill > 0:
+                        pygame.draw.rect(screen, AMBER, (x, y, fill, bar_h), border_radius=4)
+                    pygame.draw.rect(screen, AMBER, (x, y, phase_w, bar_h), 2, border_radius=4)
+                    label = self.font_phase.render(
+                        f"{name}  {self._fmt(self.phase_remaining)}", True, COLORS["white"])
+            elif i == self.prep_index and self.phase == "code_entry":
+                # Should be complete if we're here, but just in case
+                pygame.draw.rect(screen, COLORS["green"], (x, y, phase_w, bar_h), border_radius=4)
+                label = self.font_phase.render(f"[OK] {name}", True, COLORS["bg"])
             else:
-                # Locked
                 pygame.draw.rect(screen, (25, 25, 30), (x, y, phase_w, bar_h), border_radius=4)
                 pygame.draw.rect(screen, COLORS["grey"], (x, y, phase_w, bar_h), 1, border_radius=4)
                 label = self.font_phase.render(name, True, COLORS["grey"])
@@ -465,8 +567,6 @@ class MissileLaunchMode(GameMode):
 
     def _draw_prep(self, screen):
         self._draw_grid(screen, (16, 12, 0))
-
-        # Header
         pygame.draw.rect(screen, DIM_AMBER, (0, 0, SCREEN_WIDTH, 52))
         header = self.font_sm.render("STRATEGIC LAUNCH CONTROL  //  PREP SEQUENCE", True, AMBER)
         screen.blit(header, header.get_rect(centerx=SCREEN_WIDTH // 2, centery=26))
@@ -479,42 +579,39 @@ class MissileLaunchMode(GameMode):
         screen.blit(gl, gl.get_rect(right=SCREEN_WIDTH - 16, y=104))
 
         # Current action
-        phase_name = PREP_PHASES[self.prep_phase] if self.prep_phase < len(PREP_PHASES) else "READY"
-        status = self.font_med.render(f"PHASE: {phase_name}", True, AMBER)
+        name = self._current_phase_name()
+        if not self.phase_initiated:
+            status = self.font_med.render(f"HOLD [BLUE] TO START {name}", True, AMBER)
+        else:
+            status = self.font_med.render(f"{name} IN PROGRESS", True, AMBER)
         screen.blit(status, (60, 72))
 
         # Phase indicators
         self._draw_phase_indicators(screen, 150)
 
-        # Missile (evolves with phase completion)
+        # Missile visual
         raised = 0.0
-        if self.prep_phase >= 2:
-            raised = self.phase_progress / self.hold_time if self.prep_phase == 2 else 1.0
+        # RAISE is index 1 in PREP_PHASES
+        if self.prep_index > 1 or (self.prep_index == 1 and self.phase_initiated):
+            dur = float(self.phase_durations["raise_time"])
+            if self.prep_index > 1:
+                raised = 1.0
+            elif dur > 0:
+                raised = 1.0 - (self.phase_remaining / dur)
         fuel_flame = 0.0
-        if self.prep_phase >= 1:
+        if self.prep_index > 0 or (self.prep_index == 0 and self.phase_initiated):
             fuel_flame = 0.15 + 0.1 * math.sin(self.anim_time * 6)
         self._draw_missile(screen, 130, 460, 1.0, flame=fuel_flame, raised_pct=raised)
 
         # Telemetry
         self._draw_telemetry(screen, pygame.Rect(600, 210, 420, 230), DIM_AMBER)
 
-        # Disable meter (shows when RED is held at phase 0 with 0 progress)
-        if self.disable_progress > 0:
-            pct = self.disable_progress / self.hold_time
-            lbl = self.font_med.render(
-                f"DISABLING {int(pct * 100)}%", True, ALERT_RED)
-            screen.blit(lbl, lbl.get_rect(centerx=SCREEN_WIDTH // 2, y=470))
-            bar_w, bar_h = 460, 24
-            bx = SCREEN_WIDTH // 2 - bar_w // 2
-            by = 512
-            pygame.draw.rect(screen, (40, 10, 10), (bx, by, bar_w, bar_h))
-            pygame.draw.rect(screen, ALERT_RED, (bx, by, int(bar_w * pct), bar_h))
-            pygame.draw.rect(screen, ALERT_RED, (bx, by, bar_w, bar_h), 2)
-
         # Controls
-        hint = self.font_sm.render(
-            "HOLD [BLUE] to advance phase   //   HOLD [RED] to reverse / disable",
-            True, COLORS["grey"])
+        if not self.phase_initiated:
+            hint_text = f"HOLD [BLUE] 4s to initiate   //   [RED] reverses"
+        else:
+            hint_text = f"Timer runs automatically   //   [RED] reverses progress"
+        hint = self.font_sm.render(hint_text, True, COLORS["grey"])
         screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 28))
 
     def _draw_code_entry(self, screen):
@@ -523,21 +620,17 @@ class MissileLaunchMode(GameMode):
         header = self.font_sm.render("STRATEGIC LAUNCH CONTROL  //  READY", True, AMBER)
         screen.blit(header, header.get_rect(centerx=SCREEN_WIDTH // 2, centery=26))
 
-        # Game clock
         clock_col = ALERT_RED if self.game_remaining < 60 else AMBER
         clock = self.font_med.render(self._fmt(self.game_remaining), True, clock_col)
         screen.blit(clock, clock.get_rect(right=SCREEN_WIDTH - 16, y=62))
         gl = self.font_sm.render("GAME TIME", True, COLORS["grey"])
         screen.blit(gl, gl.get_rect(right=SCREEN_WIDTH - 16, y=104))
 
-        # All phases complete
         self._draw_phase_indicators(screen, 150)
 
-        # Status
         ready = self.font_med.render("MISSILE READY — ENTER LAUNCH CODE", True, COLORS["green"])
         screen.blit(ready, ready.get_rect(centerx=SCREEN_WIDTH // 2, y=210))
 
-        # Code entry
         label = self.font_label.render("AUTH CODE:", True, AMBER)
         screen.blit(label, (120, 290))
         self._draw_char_entry(screen, self.input_chars, self.input_index, 130, 340, COLORS["green"])
@@ -581,9 +674,9 @@ class MissileLaunchMode(GameMode):
         self._draw_telemetry(screen, pygame.Rect(620, 226, 400, 200), DIM_AMBER)
 
         if self.abort_progress > 0:
-            pct = self.abort_progress / self.hold_time
+            pct = self.abort_progress / ABORT_HOLD
             lbl = self.font_med.render(
-                f"ABORT SEQUENCE {int(pct * 100)}%  ({int(self.abort_progress)}/{self.hold_time}s)",
+                f"ABORT SEQUENCE {int(pct * 100)}%  ({int(self.abort_progress)}/{int(ABORT_HOLD)}s)",
                 True, COLORS["green"])
             screen.blit(lbl, lbl.get_rect(centerx=SCREEN_WIDTH // 2, y=462))
             bar_w, bar_h = 560, 30
@@ -595,7 +688,7 @@ class MissileLaunchMode(GameMode):
         else:
             prompt_col = COLORS["green"] if alert else (0, 110, 45)
             prompt = self.font_med.render(
-                f"HOLD  [RED]  {self.hold_time}s  TO ABORT", True, prompt_col)
+                f"HOLD  [RED]  {int(ABORT_HOLD)}s  TO ABORT", True, prompt_col)
             screen.blit(prompt, prompt.get_rect(centerx=SCREEN_WIDTH // 2, y=496))
 
         hint = self.font_sm.render(
@@ -620,13 +713,6 @@ class MissileLaunchMode(GameMode):
             text = self.font_big.render("MISSILE LAUNCHED", True, col)
             screen.blit(text, text.get_rect(center=(SCREEN_WIDTH // 2, 120)))
             sub_text = "TARGET DESTROYED"
-        elif self.result == "DISABLED":
-            self._draw_grid(screen, DIM_RED)
-            alpha = int((math.sin(self.pulse_time * 4) + 1) * 110)
-            col = tuple(min(255, max(40, int(c * alpha / 255))) for c in ALERT_RED)
-            text = self.font_big.render("MISSILE DISABLED", True, col)
-            screen.blit(text, text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 60)))
-            sub_text = "SYSTEM COMPROMISED"
         elif self.result == "ABORTED":
             self._draw_grid(screen, DIM_RED)
             alpha = int((math.sin(self.pulse_time * 4) + 1) * 110)
@@ -646,14 +732,13 @@ class MissileLaunchMode(GameMode):
         sub_y = 190 if self.result == "LAUNCHED" else SCREEN_HEIGHT // 2
         screen.blit(sub_surf, sub_surf.get_rect(center=(SCREEN_WIDTH // 2, sub_y)))
 
+        phases_done = min(self.prep_index, len(PREP_PHASES))
         if self.result == "LAUNCHED":
-            stat = f"Countdown: {self._fmt(self.countdown_total)}  |  Phases completed"
-        elif self.result == "DISABLED":
-            stat = f"Disabled at phase {self.prep_phase + 1}/{len(PREP_PHASES)}  |  {self._fmt(self.game_remaining)} left"
+            stat = f"Countdown: {self._fmt(self.countdown_total)}"
         elif self.result == "ABORTED":
-            stat = f"Aborted with {self._fmt(self.time_left_at_end)} left on countdown"
+            stat = f"Aborted with {self._fmt(self.time_left_at_end)} on countdown"
         else:
-            stat = f"Phases completed: {self.prep_phase}/{len(PREP_PHASES)}"
+            stat = f"Phases: {phases_done}/{len(PREP_PHASES)}"
         stats = self.font_sm.render(
             f"{stat}  |  Failed codes: {self.failed_attempts}", True, COLORS["white"])
         screen.blit(stats, stats.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 70)))
@@ -670,7 +755,6 @@ class MissileLaunchMode(GameMode):
             "failed_attempts": self.failed_attempts,
             "game_time": self.game_total,
             "countdown_total": self.countdown_total,
-            "hold_time": self.hold_time,
-            "phases_completed": self.prep_phase,
+            "phases_completed": min(self.prep_index, len(PREP_PHASES)),
             "time_left": self.time_left_at_end,
         })
