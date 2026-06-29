@@ -318,8 +318,8 @@ class MissileLaunchMode(GameMode):
                 if self.abort_progress >= ABORT_HOLD:
                     self._finish("ABORTED")
                     return
-            elif self.abort_progress > 0:
-                self.abort_progress = max(0.0, self.abort_progress - dt * 2)
+            else:
+                self.abort_progress = 0.0
             if self.timer_remaining <= 0:
                 self.timer_remaining = 0
                 self._finish("LAUNCHED")
@@ -335,7 +335,6 @@ class MissileLaunchMode(GameMode):
         dur = float(self._current_phase_duration())
 
         if not self.phase_initiated:
-            # Initiation: hold BLUE for 4 seconds.
             if blue and not red:
                 self.init_progress += dt
                 if self.init_progress >= INITIATE_HOLD:
@@ -343,11 +342,10 @@ class MissileLaunchMode(GameMode):
                     self.phase_remaining = dur
                     self.init_progress = INITIATE_HOLD
                     self.app.sound.play("confirm")
-            elif red:
-                self.init_progress = max(0.0, self.init_progress - dt)
+            else:
+                # Release resets — must be a sustained hold.
+                self.init_progress = 0.0
         else:
-            # Phase running: timer counts down automatically.
-            # RED reverses it; if reversed to full, phase is un-initiated.
             if red:
                 self.phase_remaining = min(dur, self.phase_remaining + dt)
                 if self.phase_remaining >= dur:
@@ -492,78 +490,105 @@ class MissileLaunchMode(GameMode):
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 38))
 
     def _draw_missile(self, screen, cx, base_y, scale, flame, raised_pct=0.0):
+        """Wireframe missile schematic."""
         offset = int(raised_pct * 60 * scale)
         base_y -= offset
         bw = int(26 * scale)
         bh = int(120 * scale)
         nose = int(40 * scale)
-        body = pygame.Rect(cx - bw // 2, base_y - bh, bw, bh)
-        pygame.draw.rect(screen, (210, 210, 215), body)
-        pygame.draw.rect(screen, (120, 120, 128), body, 2)
-        tip = (cx, base_y - bh - nose)
-        pygame.draw.polygon(screen, ALERT_RED, [
-            (body.left, base_y - bh), (body.right, base_y - bh), tip])
-        pygame.draw.rect(screen, (60, 120, 220),
-                         (body.left, base_y - bh + int(18 * scale), bw, int(8 * scale)))
-        fin = int(22 * scale)
-        pygame.draw.polygon(screen, (150, 30, 30), [
-            (body.left, base_y - fin), (body.left - fin, base_y), (body.left, base_y)])
-        pygame.draw.polygon(screen, (150, 30, 30), [
-            (body.right, base_y - fin), (body.right + fin, base_y), (body.right, base_y)])
-        if flame > 0:
-            flick = random.uniform(0.7, 1.3)
-            fl = int(70 * scale * flame * flick)
-            fw = int(bw * 0.8)
-            pygame.draw.polygon(screen, AMBER, [
-                (cx - fw // 2, base_y), (cx + fw // 2, base_y), (cx, base_y + fl)])
-            pygame.draw.polygon(screen, ALERT_RED, [
-                (cx - fw // 3, base_y), (cx + fw // 3, base_y), (cx, base_y + int(fl * 0.6))])
+        lw = max(1, int(1.5 * scale))
+        color = AMBER
+        dim = DIM_AMBER
 
-    def _draw_phase_indicators(self, screen, y):
+        body = pygame.Rect(cx - bw // 2, base_y - bh, bw, bh)
+        tip = (cx, base_y - bh - nose)
+        # Body outline
+        pygame.draw.rect(screen, color, body, lw)
+        # Nose cone outline
+        pygame.draw.polygon(screen, color, [
+            (body.left, base_y - bh), (body.right, base_y - bh), tip], lw)
+        # Section lines
+        for frac in (0.25, 0.55, 0.75):
+            sy = body.top + int(bh * frac)
+            pygame.draw.line(screen, dim, (body.left, sy), (body.right, sy), 1)
+        # Center line
+        pygame.draw.line(screen, dim, (cx, tip[1]), (cx, base_y), 1)
+        # Fin outlines
+        fin = int(22 * scale)
+        pygame.draw.polygon(screen, color, [
+            (body.left, base_y - fin), (body.left - fin, base_y), (body.left, base_y)], lw)
+        pygame.draw.polygon(screen, color, [
+            (body.right, base_y - fin), (body.right + fin, base_y), (body.right, base_y)], lw)
+        # Nozzle
+        nw = int(bw * 0.6)
+        pygame.draw.line(screen, color, (cx - nw // 2, base_y), (cx + nw // 2, base_y), lw)
+        pygame.draw.line(screen, color, (cx - nw // 2, base_y), (cx - nw // 3, base_y + int(8 * scale)), lw)
+        pygame.draw.line(screen, color, (cx + nw // 2, base_y), (cx + nw // 3, base_y + int(8 * scale)), lw)
+        # Annotation lines
+        ax = body.right + int(12 * scale)
+        for i, (label, frac) in enumerate([("NOSE", 0.0), ("GUIDANCE", 0.3), ("PAYLOAD", 0.6), ("ENGINE", 0.9)]):
+            ay = body.top + int(bh * frac)
+            pygame.draw.line(screen, dim, (body.right, ay), (ax, ay), 1)
+            surf = self.font_mono.render(label, True, dim)
+            screen.blit(surf, (ax + 4, ay - surf.get_height() // 2))
+        # Exhaust plume (wireframe flicker)
+        if flame > 0:
+            for j in range(3):
+                flick = random.uniform(0.5, 1.0)
+                fl = int(50 * scale * flame * flick)
+                fw = int(bw * (0.5 - j * 0.12))
+                col = AMBER if j == 0 else ALERT_RED if j == 1 else dim
+                pygame.draw.line(screen, col, (cx - fw, base_y + j * 3), (cx, base_y + fl), 1)
+                pygame.draw.line(screen, col, (cx + fw, base_y + j * 3), (cx, base_y + fl), 1)
+
+    def _draw_phase_checklist(self, screen, y):
+        """Small status indicators for each phase — no progress bars here."""
         cx = SCREEN_WIDTH // 2
-        phase_w = 220
-        gap = 30
+        phase_w = 180
+        gap = 20
         total = len(PREP_PHASES) * phase_w + (len(PREP_PHASES) - 1) * gap
         sx = cx - total // 2
 
-        for i, (name, key) in enumerate(PREP_PHASES):
+        for i, (name, _) in enumerate(PREP_PHASES):
             x = sx + i * (phase_w + gap)
-            bar_h = 32
-            dur = self.phase_durations[key]
-
-            if i < self.prep_index:
-                pygame.draw.rect(screen, COLORS["green"], (x, y, phase_w, bar_h), border_radius=4)
+            h = 28
+            if i < self.prep_index or (i <= self.prep_index and self.phase == "code_entry"):
+                pygame.draw.rect(screen, COLORS["green"], (x, y, phase_w, h), border_radius=3)
                 label = self.font_phase.render(f"[OK] {name}", True, COLORS["bg"])
-            elif i == self.prep_index and self.phase in ("prep",):
-                if not self.phase_initiated:
-                    # Showing initiation progress
-                    pct = self.init_progress / INITIATE_HOLD
-                    pygame.draw.rect(screen, (30, 30, 40), (x, y, phase_w, bar_h), border_radius=4)
-                    fill = int(phase_w * pct)
-                    if fill > 0:
-                        pygame.draw.rect(screen, COLORS["yellow"], (x, y, fill, bar_h), border_radius=4)
-                    pygame.draw.rect(screen, COLORS["yellow"], (x, y, phase_w, bar_h), 2, border_radius=4)
-                    label = self.font_phase.render(f"{name}  HOLD", True, COLORS["white"])
-                else:
-                    # Timer running
-                    pct = 1.0 - (self.phase_remaining / dur) if dur > 0 else 1.0
-                    pygame.draw.rect(screen, (30, 30, 40), (x, y, phase_w, bar_h), border_radius=4)
-                    fill = int(phase_w * pct)
-                    if fill > 0:
-                        pygame.draw.rect(screen, AMBER, (x, y, fill, bar_h), border_radius=4)
-                    pygame.draw.rect(screen, AMBER, (x, y, phase_w, bar_h), 2, border_radius=4)
-                    label = self.font_phase.render(
-                        f"{name}  {self._fmt(self.phase_remaining)}", True, COLORS["white"])
-            elif i == self.prep_index and self.phase == "code_entry":
-                # Should be complete if we're here, but just in case
-                pygame.draw.rect(screen, COLORS["green"], (x, y, phase_w, bar_h), border_radius=4)
-                label = self.font_phase.render(f"[OK] {name}", True, COLORS["bg"])
+            elif i == self.prep_index:
+                pygame.draw.rect(screen, AMBER, (x, y, phase_w, h), 2, border_radius=3)
+                label = self.font_phase.render(name, True, AMBER)
             else:
-                pygame.draw.rect(screen, (25, 25, 30), (x, y, phase_w, bar_h), border_radius=4)
-                pygame.draw.rect(screen, COLORS["grey"], (x, y, phase_w, bar_h), 1, border_radius=4)
+                pygame.draw.rect(screen, COLORS["grey"], (x, y, phase_w, h), 1, border_radius=3)
                 label = self.font_phase.render(name, True, COLORS["grey"])
+            screen.blit(label, label.get_rect(center=(x + phase_w // 2, y + h // 2)))
 
-            screen.blit(label, label.get_rect(center=(x + phase_w // 2, y + bar_h // 2)))
+    def _draw_active_phase_bar(self, screen, y):
+        """Full-width progress bar + status text for the current prep phase."""
+        name = self._current_phase_name()
+        dur = float(self._current_phase_duration())
+        bar_x, bar_w, bar_h = 60, SCREEN_WIDTH - 120, 32
+
+        if not self.phase_initiated:
+            pct = self.init_progress / INITIATE_HOLD
+            status = f"INITIATING {name}..."
+            bar_col = COLORS["yellow"]
+        else:
+            pct = 1.0 - (self.phase_remaining / dur) if dur > 0 else 1.0
+            status = f"{name}  {self._fmt(self.phase_remaining)}"
+            bar_col = AMBER
+
+        # Status text above the bar
+        label = self.font_med.render(status, True, bar_col)
+        screen.blit(label, label.get_rect(centerx=SCREEN_WIDTH // 2, y=y))
+
+        # Full-width bar below the text
+        bar_y = y + label.get_height() + 8
+        pygame.draw.rect(screen, (30, 30, 40), (bar_x, bar_y, bar_w, bar_h))
+        fill = int(bar_w * pct)
+        if fill > 0:
+            pygame.draw.rect(screen, bar_col, (bar_x, bar_y, fill, bar_h))
+        pygame.draw.rect(screen, bar_col, (bar_x, bar_y, bar_w, bar_h), 2)
 
     def _draw_prep(self, screen):
         self._draw_grid(screen, (16, 12, 0))
@@ -578,20 +603,14 @@ class MissileLaunchMode(GameMode):
         gl = self.font_sm.render("GAME TIME", True, COLORS["grey"])
         screen.blit(gl, gl.get_rect(right=SCREEN_WIDTH - 16, y=104))
 
-        # Current action
-        name = self._current_phase_name()
-        if not self.phase_initiated:
-            status = self.font_med.render(f"HOLD [BLUE] TO START {name}", True, AMBER)
-        else:
-            status = self.font_med.render(f"{name} IN PROGRESS", True, AMBER)
-        screen.blit(status, (60, 72))
+        # Phase checklist (compact, no overlaid progress)
+        self._draw_phase_checklist(screen, 72)
 
-        # Phase indicators
-        self._draw_phase_indicators(screen, 150)
+        # Active phase: status text + full-width bar below
+        self._draw_active_phase_bar(screen, 130)
 
-        # Missile visual
+        # Missile wireframe
         raised = 0.0
-        # RAISE is index 1 in PREP_PHASES
         if self.prep_index > 1 or (self.prep_index == 1 and self.phase_initiated):
             dur = float(self.phase_durations["raise_time"])
             if self.prep_index > 1:
@@ -601,16 +620,16 @@ class MissileLaunchMode(GameMode):
         fuel_flame = 0.0
         if self.prep_index > 0 or (self.prep_index == 0 and self.phase_initiated):
             fuel_flame = 0.15 + 0.1 * math.sin(self.anim_time * 6)
-        self._draw_missile(screen, 130, 460, 1.0, flame=fuel_flame, raised_pct=raised)
+        self._draw_missile(screen, 130, 480, 1.0, flame=fuel_flame, raised_pct=raised)
 
         # Telemetry
-        self._draw_telemetry(screen, pygame.Rect(600, 210, 420, 230), DIM_AMBER)
+        self._draw_telemetry(screen, pygame.Rect(560, 260, 460, 220), DIM_AMBER)
 
         # Controls
         if not self.phase_initiated:
-            hint_text = f"HOLD [BLUE] 4s to initiate   //   [RED] reverses"
+            hint_text = "HOLD [BLUE] 4s to initiate   //   Release resets"
         else:
-            hint_text = f"Timer runs automatically   //   [RED] reverses progress"
+            hint_text = "Timer runs automatically   //   [RED] reverses progress"
         hint = self.font_sm.render(hint_text, True, COLORS["grey"])
         screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 28))
 
@@ -626,7 +645,7 @@ class MissileLaunchMode(GameMode):
         gl = self.font_sm.render("GAME TIME", True, COLORS["grey"])
         screen.blit(gl, gl.get_rect(right=SCREEN_WIDTH - 16, y=104))
 
-        self._draw_phase_indicators(screen, 150)
+        self._draw_phase_checklist(screen, 72)
 
         ready = self.font_med.render("MISSILE READY — ENTER LAUNCH CODE", True, COLORS["green"])
         screen.blit(ready, ready.get_rect(centerx=SCREEN_WIDTH // 2, y=210))
