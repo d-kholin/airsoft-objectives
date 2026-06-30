@@ -625,9 +625,9 @@ class BombDefusalMode(GameMode):
                 self._save_history()
                 self.app.sound.play("defeat")
             else:
-                mod = self.modules[self.current_module]
-                if not mod["solved"] and mod["type"] == "button":
-                    self._update_button_hold(mod)
+                for mod in self.modules:
+                    if not mod["solved"] and mod["type"] == "button":
+                        self._update_button_hold(mod)
         if self.phase == "result":
             self.pulse_time += dt
 
@@ -711,6 +711,7 @@ class BombDefusalMode(GameMode):
         tab_x = 15
         for i, mod in enumerate(self.modules):
             is_current = i == self.current_module
+            holding = mod["type"] == "button" and mod.get("held")
             if mod["solved"]:
                 color = COLORS["green"]
                 label = f"[{i+1}] OK"
@@ -718,8 +719,10 @@ class BombDefusalMode(GameMode):
                 color = COLORS["yellow"]
                 label = f"[{i+1}] {mod['type'].upper()}"
             else:
-                color = COLORS["grey"]
+                color = COLORS["red"] if holding else COLORS["grey"]
                 label = f"[{i+1}] {mod['type'].upper()}"
+            if holding:
+                label += " (HOLDING)"
             surf = self.font_sm.render(label, True, color)
             screen.blit(surf, (tab_x, tab_y))
             tab_x += surf.get_width() + 20
