@@ -27,6 +27,21 @@ ABORT_HOLD = 15.0      # seconds to hold RED during countdown to abort
 SABOTAGE_HOLD = 20.0   # seconds to hold RED during prep to win as attacker
 DENIED_FLASH = 1.4
 
+SABOTAGE_FLAVOR = [
+    "Unplugging the red wire...",
+    "Installing Windows updates...",
+    "Ctrl+Alt+Del... Del... Del...",
+    "Rebooting in safe mode...",
+    "Bypassing the firewall...",
+    "Downloading more RAM...",
+    "Reformatting C:\\...",
+    "Whistling innocently...",
+    "Googling 'how to defuse a missile'...",
+    "Yanking out the mainframe...",
+    "Loosening a suspicious bolt...",
+    "Feeding the guidance gyro a virus...",
+]
+
 AMBER = (255, 176, 0)
 DIM_AMBER = (160, 112, 0)
 ALERT_RED = (255, 40, 40)
@@ -586,7 +601,11 @@ class MissileLaunchMode(GameMode):
         dur = float(self._current_phase_duration())
         bar_x, bar_w, bar_h = 60, SCREEN_WIDTH - 120, 32
 
-        if not self.phase_initiated:
+        if self.init_progress <= 0 and not self.phase_initiated:
+            pct = 0.0
+            status = f"READY — HOLD [BLUE] TO BEGIN {name}"
+            bar_col = COLORS["grey"]
+        elif not self.phase_initiated:
             pct = self.init_progress / INITIATE_HOLD
             status = f"INITIATING {name}..."
             bar_col = COLORS["yellow"]
@@ -652,7 +671,7 @@ class MissileLaunchMode(GameMode):
 
         # Controls
         if self.sabotage_progress > 0:
-            hint_text = f"!!! SABOTAGE IN PROGRESS — {int(SABOTAGE_HOLD - self.sabotage_progress) + 1}s !!!"
+            hint_text = "RELEASE [RED] TO CANCEL"
             hint_col = ALERT_RED
         elif not self.phase_initiated:
             hint_text = "HOLD [BLUE] 4s to initiate   //   Release resets"
@@ -723,8 +742,9 @@ class MissileLaunchMode(GameMode):
         pygame.draw.rect(screen, ALERT_RED, (bx, by, bar_w, bar_h), 2)
 
         secs_left = max(0, int(SABOTAGE_HOLD - self.sabotage_progress) + 1)
+        flavor = SABOTAGE_FLAVOR[int(self.sabotage_progress // 2) % len(SABOTAGE_FLAVOR)]
         sub = self.font_sm.render(
-            f"Release [RED] to cancel  —  {secs_left}s remaining", True, COLORS["grey"])
+            f"{flavor}  ({secs_left}s)", True, COLORS["grey"])
         screen.blit(sub, sub.get_rect(center=(SCREEN_WIDTH // 2, banner_y + 92)))
 
     def _draw_code_entry(self, screen):
