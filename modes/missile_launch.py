@@ -716,7 +716,7 @@ class MissileLaunchMode(GameMode):
         flash = int(self.blink * 6) % 2 == 0
 
         banner_h = 110
-        banner_y = SCREEN_HEIGHT - 150
+        banner_y = SCREEN_HEIGHT - 172
         pulse = 0.5 + 0.5 * math.sin(self.anim_time * 10)
         alpha = int(80 + 140 * pulse)
         banner = pygame.Surface((SCREEN_WIDTH, banner_h), pygame.SRCALPHA)
@@ -745,7 +745,7 @@ class MissileLaunchMode(GameMode):
         flavor = SABOTAGE_FLAVOR[int(self.sabotage_progress // 2) % len(SABOTAGE_FLAVOR)]
         sub = self.font_sm.render(
             f"{flavor}  ({secs_left}s)", True, COLORS["grey"])
-        screen.blit(sub, sub.get_rect(center=(SCREEN_WIDTH // 2, banner_y + 92)))
+        screen.blit(sub, sub.get_rect(center=(SCREEN_WIDTH // 2, banner_y + banner_h + 18)))
 
     def _draw_code_entry(self, screen):
         self._draw_grid(screen, (16, 12, 0))
