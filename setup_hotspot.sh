@@ -50,23 +50,16 @@ sudo ip addr flush dev "$AP_IFACE" 2>/dev/null || true
 sudo ip addr add "$HOTSPOT_IP/24" dev "$AP_IFACE"
 sudo ip link set "$AP_IFACE" up
 
-# Persist the virtual interface across reboots
+# Persist the virtual interface and its static IP across reboots via udev.
+# (This system has no ifupdown/networking.service, so /etc/network/interfaces.d
+# is never applied - the IP must be assigned by udev when ap0 appears.)
 UDEV_RULE='/etc/udev/rules.d/90-ap0.rules'
-if [ ! -f "$UDEV_RULE" ]; then
-    echo 'SUBSYSTEM=="net", ACTION=="add", KERNEL=="wlan0", RUN+="/sbin/iw dev wlan0 interface add ap0 type __ap"' \
-        | sudo tee "$UDEV_RULE" > /dev/null
-    echo "Created udev rule for persistent $AP_IFACE"
-fi
-
-# Persist the static IP for ap0 across reboots
-sudo mkdir -p /etc/network/interfaces.d
-NETIF_FILE="/etc/network/interfaces.d/ap0"
-sudo tee "$NETIF_FILE" > /dev/null <<EOF
-auto ap0
-iface ap0 inet static
-    address $HOTSPOT_IP
-    netmask 255.255.255.0
+sudo tee "$UDEV_RULE" > /dev/null <<EOF
+SUBSYSTEM=="net", ACTION=="add", KERNEL=="wlan0", RUN+="/sbin/iw dev wlan0 interface add ap0 type __ap"
+SUBSYSTEM=="net", ACTION=="add", KERNEL=="ap0", RUN+="/sbin/ip addr add $HOTSPOT_IP/24 dev ap0", RUN+="/sbin/ip link set ap0 up"
 EOF
+echo "Wrote udev rule for persistent $AP_IFACE + static IP"
+sudo rm -f /etc/network/interfaces.d/ap0
 
 # Configure hostapd
 sudo tee /etc/hostapd/hostapd.conf > /dev/null <<EOF
