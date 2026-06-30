@@ -11,6 +11,7 @@ from presets import timer_presets
 GOAL_PRESETS = timer_presets()
 
 CAPTURE_TIME = 10.0
+CAPTURE_GRACE = 1.0
 
 BATTLE_GROUND_Y = 448
 GRAVITY = 650.0
@@ -40,6 +41,7 @@ class DominationMode(GameMode):
         self.owner = None
         self.capture_progress = 0.0
         self.capturing_team = None
+        self.capture_held_time = 0.0
         self.result = None
         self.pulse_time = 0.0
         self.play_start_time = 0
@@ -130,21 +132,30 @@ class DominationMode(GameMode):
             if red_held and self.owner != "RED":
                 self.capturing_team = "RED"
                 self.capture_progress = 0.0
+                self.capture_held_time = 0.0
             elif blue_held and self.owner != "BLUE":
                 self.capturing_team = "BLUE"
                 self.capture_progress = 0.0
+                self.capture_held_time = 0.0
 
         if self.capturing_team is None:
             return
 
         holding = red_held if self.capturing_team == "RED" else blue_held
         if holding:
+            self.capture_held_time += dt
             self.capture_progress += dt
             if self.capture_progress >= CAPTURE_TIME:
                 self.owner = self.capturing_team
                 self.capturing_team = None
                 self.capture_progress = 0.0
                 self.app.sound.play("confirm")
+        elif self.capture_held_time < CAPTURE_GRACE:
+            # A quick accidental bump under the grace period cancels the
+            # attempt outright without putting the current owner at risk.
+            self.capturing_team = None
+            self.capture_progress = 0.0
+            self.capture_held_time = 0.0
         else:
             self.capture_progress -= dt
             if self.capture_progress <= 0:
