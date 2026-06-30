@@ -16,10 +16,16 @@ LAUNCH_PRESETS = COUNTDOWN_PRESETS
 
 # Phase order and registry keys.
 PREP_PHASES = [
-    ("FUEL", "fuel_time"),
-    ("RAISE", "raise_time"),
-    ("ARM", "arm_time"),
+    ("FUELING", "fuel_time"),
+    ("RAISING", "raise_time"),
+    ("ARMING", "arm_time"),
 ]
+
+PHASE_COMPLETE_TEXT = {
+    "FUELING": "FUELING COMPLETE",
+    "RAISING": "MISSILE IN LAUNCH POSITION",
+    "ARMING": "MISSILE ARMED",
+}
 PHASE_DEFAULTS = {"fuel_time": 240, "raise_time": 240, "arm_time": 180}
 
 INITIATE_HOLD = 4.0    # seconds to hold BLUE to start a phase
@@ -702,7 +708,8 @@ class MissileLaunchMode(GameMode):
         pygame.draw.line(screen, col, (0, banner_y + banner_h), (SCREEN_WIDTH, banner_y + banner_h), 2)
 
         title = self.font_med.render(
-            f"{self.completed_phase_name} COMPLETE", True, col)
+            PHASE_COMPLETE_TEXT.get(self.completed_phase_name, f"{self.completed_phase_name} COMPLETE"),
+            True, col)
         screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, banner_y + 30)))
 
         next_name = PREP_PHASES[self.prep_index][0]
