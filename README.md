@@ -30,6 +30,14 @@ Two teams fight over a single control point. Hold your team's button to capture 
 
 ![Domination](docs/images/domination.png)
 
+### Missile Launch
+
+One team defends a missile silo, working through Fueling, Raising, and Arming phases (hold a button to start each, then wait it out) before entering the launch code to begin the countdown. The opposing team can sabotage prep phases or abort the countdown by holding their button at the box for an extended time.
+
+**Settings:** Game time (5–30 min in 5-min steps, or custom), per-phase duration (Fueling/Raising/Arming), launch countdown
+
+![Missile Launch](docs/images/missile_launch.png)
+
 ## Hardware
 
 - **Raspberry Pi** (tested on Pi 3B+ / Pi 4) running Raspberry Pi OS (Debian Bookworm/Trixie)
