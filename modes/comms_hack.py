@@ -2,27 +2,12 @@ import pygame
 import math
 import random
 import time
-import subprocess
 from game_mode import GameMode
 from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
 from ui import draw_menu_item
 from widgets import handle_custom_timer, draw_custom_timer
 from presets import timer_presets
 from fonts import get_font
-
-
-def _get_hotspot_ip():
-    try:
-        result = subprocess.run(
-            ["hostname", "-I"], capture_output=True, text=True, timeout=2
-        )
-        ips = result.stdout.strip().split()
-        for ip in ips:
-            if ip.startswith("192.168.4."):
-                return ip
-        return ips[0] if ips else "?.?.?.?"
-    except Exception:
-        return "?.?.?.?"
 
 CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 TIMER_PRESETS = timer_presets(include_off=True)
@@ -81,8 +66,6 @@ class CommsHackMode(GameMode):
         self.stat_scroll_timer = 0.0
         self.cursor_blink = 0.0
         self.cmd_log = []
-        self.hotspot_ip = _get_hotspot_ip()
-        self.setup_source_selection = 0
 
         # If timer was queued via web with codes already set, go straight to play
         if "timer" in config and config["timer"] > 0:
@@ -97,17 +80,13 @@ class CommsHackMode(GameMode):
                 self.play_start_time = time.time()
                 self.failed_attempts = 0
             else:
-                self.phase = "setup_source"
+                self.phase = "setup_codes"
         else:
-            self.phase = "setup_source"
+            self.phase = "setup_codes"
 
     def handle_input(self, actions):
-        if self.phase == "setup_source":
-            self._handle_setup_source(actions)
-        elif self.phase == "setup_codes":
+        if self.phase == "setup_codes":
             self._handle_setup_codes(actions)
-        elif self.phase == "setup_phone":
-            self._handle_setup_phone(actions)
         elif self.phase == "setup_timer":
             self._handle_setup_timer(actions)
         elif self.phase == "setup_custom":
@@ -117,28 +96,6 @@ class CommsHackMode(GameMode):
         elif self.phase == "result":
             if "START" in actions or "GREEN_BUTTON" in actions:
                 self.setup()
-
-    def _handle_setup_source(self, actions):
-        if "UP" in actions:
-            self.setup_source_selection = (self.setup_source_selection - 1) % 2
-        if "DOWN" in actions:
-            self.setup_source_selection = (self.setup_source_selection + 1) % 2
-        if "START" in actions or "GREEN_BUTTON" in actions:
-            if self.setup_source_selection == 0:
-                self.phase = "setup_phone"
-            else:
-                self.phase = "setup_codes"
-            self.app.sound.play("confirm")
-
-    def _handle_setup_phone(self, actions):
-        codes = self.app.config_store.get_codes()
-        if codes and len(codes) == 3:
-            if "START" in actions or "GREEN_BUTTON" in actions:
-                self.codes = codes
-                self.phase = "setup_timer"
-                self.app.sound.play("confirm")
-        if "RED_BUTTON" in actions:
-            self.phase = "setup_source"
 
     def _handle_setup_codes(self, actions):
         if "UP" in actions:
@@ -262,12 +219,8 @@ class CommsHackMode(GameMode):
                     self.stat_lines.append(_random_stat_line())
 
     def draw(self, screen):
-        if self.phase == "setup_source":
-            self._draw_setup_source(screen)
-        elif self.phase == "setup_codes":
+        if self.phase == "setup_codes":
             self._draw_setup_codes(screen)
-        elif self.phase == "setup_phone":
-            self._draw_setup_phone(screen)
         elif self.phase == "setup_timer":
             self._draw_setup_timer(screen)
         elif self.phase == "setup_custom":
@@ -279,67 +232,6 @@ class CommsHackMode(GameMode):
             self._draw_decrypt_overlay(screen)
         elif self.phase == "result":
             self._draw_result(screen)
-
-    def _draw_setup_source(self, screen):
-        title = self.font_big.render("GAME MASTER SETUP", True, COLORS["yellow"])
-        screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
-
-        info = self.font_sm.render("How do you want to set codes?", True, COLORS["white"])
-        screen.blit(info, info.get_rect(centerx=SCREEN_WIDTH // 2, y=110))
-
-        options = ["PHONE / WEB", "MANUAL ENTRY"]
-        for i, label in enumerate(options):
-            draw_menu_item(
-                screen, self.font_med, label,
-                i == self.setup_source_selection,
-                SCREEN_WIDTH // 2 - 140, 180 + i * 60,
-            )
-
-        ip_text = f"Web config: http://{self.hotspot_ip}:8080"
-        ip_surf = self.font_sm.render(ip_text, True, COLORS["grey"])
-        screen.blit(ip_surf, ip_surf.get_rect(centerx=SCREEN_WIDTH // 2, y=350))
-
-        wifi_text = 'Wi-Fi: "FIELD-OPS"'
-        wifi_surf = self.font_sm.render(wifi_text, True, COLORS["grey"])
-        screen.blit(wifi_surf, wifi_surf.get_rect(centerx=SCREEN_WIDTH // 2, y=385))
-
-        hints = self.font_sm.render(
-            "UP/DOWN=select  START/GREEN=confirm", True, COLORS["grey"]
-        )
-        screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
-
-    def _draw_setup_phone(self, screen):
-        title = self.font_big.render("WAITING FOR CODES", True, COLORS["yellow"])
-        screen.blit(title, title.get_rect(centerx=SCREEN_WIDTH // 2, y=30))
-
-        wifi_surf = self.font_med.render('Wi-Fi: "FIELD-OPS"', True, COLORS["green"])
-        screen.blit(wifi_surf, wifi_surf.get_rect(centerx=SCREEN_WIDTH // 2, y=120))
-
-        url = f"http://{self.hotspot_ip}:8080"
-        url_surf = self.font_med.render(url, True, COLORS["green"])
-        screen.blit(url_surf, url_surf.get_rect(centerx=SCREEN_WIDTH // 2, y=170))
-
-        pin = self.app.config_store.get_pin()
-        pin_surf = self.font_sm.render(f"PIN: {pin}", True, COLORS["white"])
-        screen.blit(pin_surf, pin_surf.get_rect(centerx=SCREEN_WIDTH // 2, y=230))
-
-        codes = self.app.config_store.get_codes()
-        if codes and len(codes) == 3:
-            status = self.font_med.render("CODES RECEIVED", True, COLORS["green"])
-            screen.blit(status, status.get_rect(centerx=SCREEN_WIDTH // 2, y=300))
-            for i, code in enumerate(codes):
-                surf = self.font_sm.render(f"Code {i+1}: {code}", True, COLORS["green"])
-                screen.blit(surf, surf.get_rect(centerx=SCREEN_WIDTH // 2, y=350 + i * 35))
-            hint = self.font_sm.render(
-                "START/GREEN=continue  RED=back", True, COLORS["grey"]
-            )
-        else:
-            status = self.font_med.render("Waiting...", True, COLORS["grey"])
-            screen.blit(status, status.get_rect(centerx=SCREEN_WIDTH // 2, y=300))
-            hint = self.font_sm.render(
-                "Open the URL on your phone to set codes  /  RED=back", True, COLORS["grey"]
-            )
-        screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 40))
 
     def _draw_setup_codes(self, screen):
         title = self.font_big.render("GAME MASTER SETUP", True, COLORS["yellow"])
