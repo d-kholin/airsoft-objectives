@@ -12,17 +12,23 @@ A cooperative puzzle game inspired by *Keep Talking and Nobody Explodes*. One pl
 
 **Settings:** Timer (5–30 min in 5-min steps, or custom), Module count (3–6)
 
+![Bomb Defusal](docs/images/bomb_defusal.png)
+
 ### Comms Array Hack
 
 A game master sets three secret codes before the match. Players must find the codes in the field and enter them into the terminal to "hack" the comms array. Each code attempt triggers a decryption animation before revealing success or failure.
 
 **Settings:** Timer (off, 5–30 min in 5-min steps, or custom)
 
+![Comms Array Hack](docs/images/comms_hack.png)
+
 ### Domination
 
 Two teams fight over a single control point. Hold your team's button to capture — release and the progress drains back. First team to accumulate the target hold time wins. Features a live stick-figure battle scene.
 
 **Settings:** Goal time (5–30 min in 5-min steps, or custom)
+
+![Domination](docs/images/domination.png)
 
 ## Hardware
 
