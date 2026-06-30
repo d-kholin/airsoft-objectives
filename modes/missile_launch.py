@@ -24,6 +24,7 @@ PHASE_DEFAULTS = {"fuel_time": 240, "raise_time": 240, "arm_time": 180}
 
 INITIATE_HOLD = 4.0    # seconds to hold BLUE to start a phase
 ABORT_HOLD = 15.0      # seconds to hold RED during countdown to abort
+SABOTAGE_HOLD = 20.0   # seconds to hold RED during prep to win as attacker
 DENIED_FLASH = 1.4
 
 AMBER = (255, 176, 0)
@@ -91,7 +92,7 @@ class MissileLaunchMode(GameMode):
 
         self.timer_remaining = 0.0
         self.abort_progress = 0.0
-        self.reversing = False         # True while RED is actively reversing
+        self.sabotage_progress = 0.0
 
         self.completed_phase_name = ""
         self.show_complete_banner = False
@@ -338,7 +339,14 @@ class MissileLaunchMode(GameMode):
         blue = self._is_held("BLUE_BUTTON")
         red = self._is_held("RED_BUTTON")
         dur = float(self._current_phase_duration())
-        self.reversing = False
+
+        if red:
+            self.sabotage_progress += dt
+            if self.sabotage_progress >= SABOTAGE_HOLD:
+                self._finish("SABOTAGED")
+                return
+        else:
+            self.sabotage_progress = 0.0
 
         if self.awaiting_release:
             if not blue:
@@ -357,13 +365,7 @@ class MissileLaunchMode(GameMode):
             else:
                 self.init_progress = 0.0
         else:
-            if red:
-                self.reversing = True
-                self.phase_remaining = min(dur, self.phase_remaining + dt)
-                if self.phase_remaining >= dur:
-                    self.phase_initiated = False
-                    self.init_progress = 0.0
-            else:
+            if not red:
                 self.phase_remaining -= dt
                 if self.phase_remaining <= 0:
                     self.phase_remaining = 0
@@ -391,7 +393,7 @@ class MissileLaunchMode(GameMode):
         self.pulse_time = 0.0
         self.launch_anim = 0.0
         self._save_history()
-        if result == "LAUNCHED":
+        if result in ("LAUNCHED", "SABOTAGED"):
             self.app.sound.play("victory")
         else:
             self.app.sound.play("defeat")
@@ -588,17 +590,10 @@ class MissileLaunchMode(GameMode):
             pct = self.init_progress / INITIATE_HOLD
             status = f"INITIATING {name}..."
             bar_col = COLORS["yellow"]
-            reversing = False
-        elif self.reversing:
-            pct = 1.0 - (self.phase_remaining / dur) if dur > 0 else 1.0
-            status = f"WARNING: REVERSING {name}"
-            bar_col = ALERT_RED
-            reversing = True
         else:
             pct = 1.0 - (self.phase_remaining / dur) if dur > 0 else 1.0
             status = f"{name}  {self._fmt(self.phase_remaining)}"
             bar_col = AMBER
-            reversing = False
 
         # Status text above the bar
         label = self.font_med.render(status, True, bar_col)
@@ -610,25 +605,7 @@ class MissileLaunchMode(GameMode):
         fill = int(bar_w * pct)
         if fill > 0:
             pygame.draw.rect(screen, bar_col, (bar_x, bar_y, fill, bar_h))
-
-        if reversing and fill > 0:
-            # Red tint overlay + directional arrows
-            overlay = pygame.Surface((fill, bar_h), pygame.SRCALPHA)
-            overlay.fill((255, 30, 30, 100))
-            screen.blit(overlay, (bar_x, bar_y))
-            for ax in range(bar_x + fill - 20, bar_x, -40):
-                if ax > bar_x:
-                    pygame.draw.polygon(screen, ALERT_RED, [
-                        (ax, bar_y + 4), (ax, bar_y + bar_h - 4),
-                        (ax - 16, bar_y + bar_h // 2)])
-
         pygame.draw.rect(screen, bar_col, (bar_x, bar_y, bar_w, bar_h), 2)
-
-        if reversing:
-            sub = self.font_sm.render(
-                f"{name}  {self._fmt(self.phase_remaining)}  >>>  REVERSING",
-                True, ALERT_RED)
-            screen.blit(sub, sub.get_rect(centerx=SCREEN_WIDTH // 2, y=bar_y + bar_h + 6))
 
     def _draw_prep(self, screen):
         self._draw_grid(screen, (16, 12, 0))
@@ -669,15 +646,19 @@ class MissileLaunchMode(GameMode):
         if self.show_complete_banner:
             self._draw_complete_banner(screen)
 
+        # Sabotage overlay
+        if self.sabotage_progress > 0:
+            self._draw_sabotage_overlay(screen)
+
         # Controls
-        if self.reversing:
-            hint_text = "[RED] held — progress reversing"
+        if self.sabotage_progress > 0:
+            hint_text = f"!!! SABOTAGE IN PROGRESS — {int(SABOTAGE_HOLD - self.sabotage_progress) + 1}s !!!"
             hint_col = ALERT_RED
         elif not self.phase_initiated:
             hint_text = "HOLD [BLUE] 4s to initiate   //   Release resets"
             hint_col = COLORS["grey"]
         else:
-            hint_text = "Timer runs automatically   //   [RED] reverses progress"
+            hint_text = "Timer runs automatically   //   [RED] = SABOTAGE"
             hint_col = COLORS["grey"]
         hint = self.font_sm.render(hint_text, True, hint_col)
         screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 28))
@@ -709,6 +690,42 @@ class MissileLaunchMode(GameMode):
         sub = self.font_sm.render(
             f">>> HOLD [BLUE] TO BEGIN {next_name} >>>", True, col)
         screen.blit(sub, sub.get_rect(center=(SCREEN_WIDTH // 2, banner_y + 70)))
+
+    def _draw_sabotage_overlay(self, screen):
+        """Flashing red sabotage-in-progress banner."""
+        pct = self.sabotage_progress / SABOTAGE_HOLD
+        flash = int(self.blink * 6) % 2 == 0
+
+        banner_h = 110
+        banner_y = SCREEN_HEIGHT - 150
+        pulse = 0.5 + 0.5 * math.sin(self.anim_time * 10)
+        alpha = int(80 + 140 * pulse)
+        banner = pygame.Surface((SCREEN_WIDTH, banner_h), pygame.SRCALPHA)
+        banner.fill((60, 0, 0, alpha))
+        for sy in range(4, banner_h, 4):
+            pygame.draw.line(banner, (120, 0, 0, min(255, alpha)), (0, sy), (SCREEN_WIDTH, sy), 1)
+        screen.blit(banner, (0, banner_y))
+
+        edge_col = ALERT_RED if flash else (120, 20, 20)
+        pygame.draw.line(screen, edge_col, (0, banner_y), (SCREEN_WIDTH, banner_y), 2)
+        pygame.draw.line(screen, edge_col, (0, banner_y + banner_h), (SCREEN_WIDTH, banner_y + banner_h), 2)
+
+        title_col = ALERT_RED if flash else (180, 30, 30)
+        title = self.font_med.render("!!! SABOTAGE IN PROGRESS !!!", True, title_col)
+        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, banner_y + 28)))
+
+        # Progress bar
+        bar_w, bar_h = 560, 24
+        bx = SCREEN_WIDTH // 2 - bar_w // 2
+        by = banner_y + 56
+        pygame.draw.rect(screen, (40, 0, 0), (bx, by, bar_w, bar_h))
+        pygame.draw.rect(screen, ALERT_RED, (bx, by, int(bar_w * pct), bar_h))
+        pygame.draw.rect(screen, ALERT_RED, (bx, by, bar_w, bar_h), 2)
+
+        secs_left = max(0, int(SABOTAGE_HOLD - self.sabotage_progress) + 1)
+        sub = self.font_sm.render(
+            f"Release [RED] to cancel  —  {secs_left}s remaining", True, COLORS["grey"])
+        screen.blit(sub, sub.get_rect(center=(SCREEN_WIDTH // 2, banner_y + 92)))
 
     def _draw_code_entry(self, screen):
         self._draw_grid(screen, (16, 12, 0))
@@ -809,6 +826,13 @@ class MissileLaunchMode(GameMode):
             text = self.font_big.render("MISSILE LAUNCHED", True, col)
             screen.blit(text, text.get_rect(center=(SCREEN_WIDTH // 2, 120)))
             sub_text = "TARGET DESTROYED"
+        elif self.result == "SABOTAGED":
+            self._draw_grid(screen, DIM_RED)
+            alpha = int((math.sin(self.pulse_time * 6) + 1) * 110)
+            col = tuple(min(255, max(40, int(c * alpha / 255))) for c in ALERT_RED)
+            text = self.font_big.render("SABOTAGE COMPLETE", True, col)
+            screen.blit(text, text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 60)))
+            sub_text = "ATTACKERS WIN"
         elif self.result == "ABORTED":
             self._draw_grid(screen, DIM_RED)
             alpha = int((math.sin(self.pulse_time * 4) + 1) * 110)
@@ -831,6 +855,8 @@ class MissileLaunchMode(GameMode):
         phases_done = min(self.prep_index, len(PREP_PHASES))
         if self.result == "LAUNCHED":
             stat = f"Countdown: {self._fmt(self.countdown_total)}"
+        elif self.result == "SABOTAGED":
+            stat = f"Sabotaged after {phases_done}/{len(PREP_PHASES)} phases"
         elif self.result == "ABORTED":
             stat = f"Aborted with {self._fmt(self.time_left_at_end)} on countdown"
         else:

@@ -3,7 +3,7 @@ import math
 import random
 import time
 from game_mode import GameMode
-from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
+from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT, BUTTON_MAP
 from ui import draw_menu_item
 from widgets import draw_7seg_time, seg7_width, handle_custom_timer, draw_custom_timer
 from presets import timer_presets, MODULE_PRESETS
@@ -350,6 +350,9 @@ class BombDefusalMode(GameMode):
         self.play_start_time = 0
         self.play_end_time = 0
         self.failed_attempts = 0
+        self.action_keys = {}
+        for key, action in BUTTON_MAP.items():
+            self.action_keys.setdefault(action, []).append(key)
 
         if "timer" in config and "modules" in config:
             self.timer_total = config["timer"]
@@ -358,6 +361,10 @@ class BombDefusalMode(GameMode):
             self._start_game()
         else:
             self.phase = "setup_timer"
+
+    def _is_held(self, action):
+        pressed = pygame.key.get_pressed()
+        return any(pressed[k] for k in self.action_keys.get(action, []))
 
     def _draw_selector(self, screen, y, h, x=35, w=None):
         if w is None:
@@ -495,22 +502,27 @@ class BombDefusalMode(GameMode):
                     self._strike()
                     mod["held"] = False
                     mod["phase"] = "waiting"
-        else:
-            if "GREEN_BUTTON" in actions and not mod["held"]:
-                mod["held"] = True
-                mod["phase"] = "holding"
-                mod["release_digit"] = _solve_button_release(mod)
-            if "START" in actions and mod["held"]:
-                timer_ones = int(self.timer_remaining) % 10
-                if timer_ones == mod["release_digit"]:
-                    mod["solved"] = True
-                    mod["phase"] = "waiting"
-                    self.app.sound.play("confirm")
-                    self._check_win()
-                else:
-                    mod["held"] = False
-                    mod["phase"] = "waiting"
-                    self._strike()
+
+    def _update_button_hold(self, mod):
+        """Called every frame to track hold/release via real-time key state."""
+        if _solve_button_action(mod, self.serial) != "hold":
+            return
+        green_held = self._is_held("GREEN_BUTTON")
+        if green_held and not mod["held"]:
+            mod["held"] = True
+            mod["phase"] = "holding"
+            mod["release_digit"] = _solve_button_release(mod)
+        elif not green_held and mod["held"]:
+            timer_ones = int(self.timer_remaining) % 10
+            if timer_ones == mod["release_digit"]:
+                mod["solved"] = True
+                mod["phase"] = "waiting"
+                self.app.sound.play("confirm")
+                self._check_win()
+            else:
+                mod["held"] = False
+                mod["phase"] = "waiting"
+                self._strike()
 
     def _skip_discharged_caps(self, mod, direction):
         n = len(mod["capacitors"])
@@ -612,6 +624,10 @@ class BombDefusalMode(GameMode):
                 self.pulse_time = 0.0
                 self._save_history()
                 self.app.sound.play("defeat")
+            else:
+                mod = self.modules[self.current_module]
+                if not mod["solved"] and mod["type"] == "button":
+                    self._update_button_hold(mod)
         if self.phase == "result":
             self.pulse_time += dt
 
@@ -817,7 +833,7 @@ class BombDefusalMode(GameMode):
             strip_color = WIRE_RGB.get(mod["color"], COLORS["white"])
             pygame.draw.rect(screen, strip_color, (SCREEN_WIDTH // 2 - 60, 380, 120, 20))
             hold_info = self.font_sm.render(
-                "HOLDING — press START to release", True, COLORS["yellow"]
+                "HOLDING — release GREEN to release", True, COLORS["yellow"]
             )
             screen.blit(hold_info, hold_info.get_rect(centerx=SCREEN_WIDTH // 2, y=410))
             hint = self.font_mono.render(
@@ -827,7 +843,7 @@ class BombDefusalMode(GameMode):
             screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=445))
         else:
             action_hint = self.font_sm.render(
-                "GREEN = tap the button  |  hold GREEN then START = hold & release",
+                "GREEN = tap the button  |  hold GREEN to hold & release",
                 True, COLORS["grey"],
             )
             screen.blit(action_hint, action_hint.get_rect(centerx=SCREEN_WIDTH // 2, y=400))
