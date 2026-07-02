@@ -60,7 +60,10 @@ class App:
                     self.exit_hold_time = 0.0
 
                 if self.confirm_exit:
-                    if self.input.is_action_held("BACK"):
+                    if any(a for a in actions if a != "BACK"):
+                        self.confirm_exit = False
+                        self.exit_hold_time = 0.0
+                    elif self.input.is_action_held("BACK"):
                         self.exit_hold_time += dt
                         if self.exit_hold_time >= 10.0:
                             self.confirm_exit = False
