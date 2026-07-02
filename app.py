@@ -150,7 +150,8 @@ class App:
         msg = font_big.render("HOLD ESC TO EXIT", True, COLORS["yellow"])
         screen.blit(msg, msg.get_rect(center=(cx, cy - 50)))
 
-        hint = font_sm.render("Release to cancel", True, COLORS["grey"])
+        secs_left = max(0, int(10.0 - hold_time) + 1) if hold_time > 0 else 10
+        hint = font_sm.render(f"Release to cancel  —  {secs_left}s", True, COLORS["grey"])
         screen.blit(hint, hint.get_rect(center=(cx, cy)))
 
         bar_w, bar_h = 400, 24
