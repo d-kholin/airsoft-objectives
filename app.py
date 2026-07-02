@@ -26,6 +26,7 @@ class App:
         self.clock = pygame.time.Clock()
         self.running = True
         self.confirm_exit = False
+        self.exit_hold_time = 0.0
         self.active_mode = None
         self.force_start_queued = False
         self.switch_mode(MenuMode)
@@ -53,23 +54,28 @@ class App:
                 self.running = False
                 continue
 
-            if "BACK" in actions and not isinstance(self.active_mode, MenuMode):
-                if self.confirm_exit:
-                    self.confirm_exit = False
-                    self.switch_mode(MenuMode)
-                else:
+            if not isinstance(self.active_mode, MenuMode):
+                if "BACK" in actions and not self.confirm_exit:
                     self.confirm_exit = True
-                continue
+                    self.exit_hold_time = 0.0
 
-            if self.confirm_exit and any(a for a in actions if a != "BACK"):
-                self.confirm_exit = False
+                if self.confirm_exit:
+                    if self.input.is_action_held("BACK"):
+                        self.exit_hold_time += dt
+                        if self.exit_hold_time >= 10.0:
+                            self.confirm_exit = False
+                            self.exit_hold_time = 0.0
+                            self.switch_mode(MenuMode)
+                            continue
+                    else:
+                        self.exit_hold_time = 0.0
 
             self.active_mode.handle_input(actions)
             self.active_mode.update(dt)
             self.display.clear()
             self.active_mode.draw(self.display.screen)
             if self.confirm_exit:
-                self._draw_exit_confirm(self.display.screen)
+                self._draw_exit_confirm(self.display.screen, self.exit_hold_time)
             self.display.flip()
 
         pygame.quit()
@@ -128,13 +134,26 @@ class App:
         except Exception:
             pass
 
-    def _draw_exit_confirm(self, screen):
+    def _draw_exit_confirm(self, screen, hold_time):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         screen.blit(overlay, (0, 0))
         font_big = pygame.font.Font(None, 60)
         font_sm = pygame.font.Font(None, 36)
-        msg = font_big.render("EXIT TO MENU?", True, COLORS["yellow"])
-        screen.blit(msg, msg.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 20)))
-        hint = font_sm.render("BACK again = yes  /  any other key = cancel", True, COLORS["grey"])
-        screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30)))
+
+        cx = SCREEN_WIDTH // 2
+        cy = SCREEN_HEIGHT // 2
+
+        msg = font_big.render("HOLD ESC TO EXIT", True, COLORS["yellow"])
+        screen.blit(msg, msg.get_rect(center=(cx, cy - 50)))
+
+        hint = font_sm.render("Release to cancel", True, COLORS["grey"])
+        screen.blit(hint, hint.get_rect(center=(cx, cy)))
+
+        bar_w, bar_h = 400, 24
+        bar_x = cx - bar_w // 2
+        bar_y = cy + 30
+        pygame.draw.rect(screen, COLORS["dark_grey"], (bar_x, bar_y, bar_w, bar_h), border_radius=4)
+        fill = int(bar_w * min(hold_time / 10.0, 1.0))
+        if fill > 0:
+            pygame.draw.rect(screen, COLORS["red"], (bar_x, bar_y, fill, bar_h), border_radius=4)
