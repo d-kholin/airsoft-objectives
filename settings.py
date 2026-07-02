@@ -4,16 +4,24 @@ SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 600
 FPS = 30
 
-# USB encoder board button-to-action mapping.
-# Run `python3 -c "import pygame; pygame.init(); s=pygame.display.set_mode((200,200)); [print(e.key) for e in iter(lambda: pygame.event.wait(), None) if e.type==pygame.KEYDOWN]"`
-# to discover your board's keycodes, then update this map.
+# DragonRise Generic USB Joystick button-to-action mapping.
+# Discovered via JoyButtonDown events: button index → action.
 BUTTON_MAP = {
+    0: "BACK",        # Escape / kill match
+    1: "RED_BUTTON",
+    2: "BLUE_BUTTON",
+    3: "GREEN_BUTTON",
+    11: "UP",
+    10: "DOWN",
+}
+
+# Keyboard fallbacks for dev/testing without the joystick.
+KEY_MAP = {
     pygame.K_UP: "UP",
     pygame.K_DOWN: "DOWN",
     pygame.K_1: "RED_BUTTON",
     pygame.K_2: "BLUE_BUTTON",
     pygame.K_3: "GREEN_BUTTON",
-    pygame.K_5: "START",
     pygame.K_RETURN: "START",
     pygame.K_ESCAPE: "BACK",
 }

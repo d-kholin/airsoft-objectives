@@ -14,6 +14,10 @@ SCREENSHOT_FILE = Path(__file__).parent / "data" / "screen.jpg"
 class App:
     def __init__(self, fullscreen=True):
         pygame.init()
+        pygame.joystick.init()
+        self._joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+        for j in self._joysticks:
+            j.init()
         self.display = Display(SCREEN_WIDTH, SCREEN_HEIGHT, fullscreen)
         self.input = InputHandler(BUTTON_MAP)
         self.sound = SoundManager()

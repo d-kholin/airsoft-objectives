@@ -20,7 +20,28 @@ PHASE_OPTIONS = registry_options(PHASE_PRESETS)
 
 _CUSTOM = {"custom_min": CUSTOM_MIN_MINUTES, "custom_max": CUSTOM_MAX_MINUTES}
 
+RESPAWN_OPTIONS = [{"label": str(n), "value": n} for n in (5, 10, 15, 20, 25, 30)]
+
 GAME_MODES = {
+    "respawn_pool": {
+        "name": "Respawn Pool",
+        "description": "Track a shared pool of respawns for the whole team",
+        "settings": {
+            "respawns": {
+                "label": "Respawns",
+                "type": "choice",
+                "options": RESPAWN_OPTIONS,
+                "default": 10,
+            },
+            "timer": {
+                "label": "Timer",
+                "type": "choice",
+                "options": TIMER_OPTIONS_WITH_OFF,
+                "default": 0,
+                **_CUSTOM,
+            },
+        },
+    },
     "comms_hack": {
         "name": "Comms Array Hack",
         "description": "Enter 3 codes to hack the comms array before time runs out",
@@ -117,7 +138,10 @@ def get_mode_info(mode_id):
 
 def get_mode_class(mode_id):
     """Import and return the GameMode class for a mode."""
-    if mode_id == "comms_hack":
+    if mode_id == "respawn_pool":
+        from modes.respawn_pool import RespawnPoolMode
+        return RespawnPoolMode
+    elif mode_id == "comms_hack":
         from modes.comms_hack import CommsHackMode
         return CommsHackMode
     elif mode_id == "bomb_defusal":

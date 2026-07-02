@@ -4,6 +4,12 @@ Airsoft objective system built on a Raspberry Pi. Runs fullscreen game modes on 
 
 ## Game Modes
 
+### Respawn Pool
+
+A simple shared respawn counter for the whole team. Set how many respawns are in the pool and an optional timer, then use GREEN/RED to spend or return a respawn during the match.
+
+**Settings:** Respawns (5–30), Timer (off, 5–30 min in 5-min steps, or custom)
+
 ### Bomb Defusal
 
 A cooperative puzzle game inspired by *Keep Talking and Nobody Explodes*. One player interacts with the bomb on screen while teammates read the [defusal manual](docs/bomb_defusal_manual.md) over radio. Solve all modules before the timer runs out — three strikes and it detonates.

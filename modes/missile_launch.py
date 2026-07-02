@@ -277,7 +277,7 @@ class MissileLaunchMode(GameMode):
             self.app.sound.play("confirm")
         if "RED_BUTTON" in actions and self.secret_chars:
             self.secret_chars.pop()
-        if "START" in actions and self.secret_chars:
+        if "BLUE_BUTTON" in actions and self.secret_chars:
             self.app.sound.play("confirm")
             self._enter_prep()
 
@@ -289,7 +289,7 @@ class MissileLaunchMode(GameMode):
             self.app.sound.play("confirm")
         if "RED_BUTTON" in actions and self.input_chars:
             self.input_chars.pop()
-        if "START" in actions and self.input_chars:
+        if "BLUE_BUTTON" in actions and self.input_chars:
             if "".join(self.input_chars) == "".join(self.secret_chars):
                 self._begin_countdown()
             else:
@@ -524,7 +524,7 @@ class MissileLaunchMode(GameMode):
         screen.blit(cfg, cfg.get_rect(centerx=SCREEN_WIDTH // 2, y=400))
 
         hints = self.font_sm.render(
-            "UP/DOWN=char  GREEN=add  RED=delete  START=arm system", True, COLORS["grey"])
+            "UP/DOWN=char  GREEN=add  RED=delete  BLUE=arm system", True, COLORS["grey"])
         screen.blit(hints, hints.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 38))
 
     def _draw_missile(self, screen, cx, base_y, scale, flame, raised_pct=0.0):
@@ -787,7 +787,7 @@ class MissileLaunchMode(GameMode):
             screen.blit(fa, (130, 490))
 
         hint = self.font_sm.render(
-            "UP/DOWN=char  GREEN=add  RED=delete  START=transmit", True, COLORS["grey"])
+            "UP/DOWN=char  GREEN=add  RED=delete  BLUE=transmit", True, COLORS["grey"])
         screen.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, y=SCREEN_HEIGHT - 38))
 
     def _draw_countdown(self, screen):
@@ -892,7 +892,7 @@ class MissileLaunchMode(GameMode):
             f"{stat}  |  Failed codes: {self.failed_attempts}", True, COLORS["white"])
         screen.blit(stats, stats.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 70)))
 
-        prompt = self.font_sm.render("Press START to play again", True, COLORS["grey"])
+        prompt = self.font_sm.render("Press GREEN to play again", True, COLORS["grey"])
         screen.blit(prompt, prompt.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50)))
 
     def _save_history(self):
