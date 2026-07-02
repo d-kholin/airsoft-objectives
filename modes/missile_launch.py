@@ -3,7 +3,7 @@ import math
 import random
 import time
 from game_mode import GameMode
-from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT, BUTTON_MAP
+from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
 from ui import draw_menu_item
 from widgets import draw_7seg_time, seg7_width, handle_custom_timer, draw_custom_timer
 from presets import timer_presets, COUNTDOWN_PRESETS, PHASE_PRESETS
@@ -130,9 +130,6 @@ class MissileLaunchMode(GameMode):
         self.telemetry = [_telemetry_line() for _ in range(11)]
         self.telemetry_timer = 0.0
 
-        self.action_keys = {}
-        for key, action in BUTTON_MAP.items():
-            self.action_keys.setdefault(action, []).append(key)
 
         if any(k in config for _, k in PREP_PHASES) or "game_time" in config:
             code = self.app.config_store.get_launch_code()
@@ -162,8 +159,7 @@ class MissileLaunchMode(GameMode):
         return 0
 
     def _is_held(self, action):
-        pressed = pygame.key.get_pressed()
-        return any(pressed[k] for k in self.action_keys.get(action, []))
+        return self.app.input.is_action_held(action)
 
     def _nav(self, selection, count, actions):
         if "UP" in actions:

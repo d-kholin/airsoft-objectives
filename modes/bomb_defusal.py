@@ -3,7 +3,7 @@ import math
 import random
 import time
 from game_mode import GameMode
-from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT, BUTTON_MAP
+from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
 from ui import draw_menu_item
 from widgets import draw_7seg_time, seg7_width, handle_custom_timer, draw_custom_timer
 from presets import timer_presets, MODULE_PRESETS
@@ -350,9 +350,6 @@ class BombDefusalMode(GameMode):
         self.play_start_time = 0
         self.play_end_time = 0
         self.failed_attempts = 0
-        self.action_keys = {}
-        for key, action in BUTTON_MAP.items():
-            self.action_keys.setdefault(action, []).append(key)
 
         if "timer" in config and "modules" in config:
             self.timer_total = config["timer"]
@@ -363,8 +360,7 @@ class BombDefusalMode(GameMode):
             self.phase = "setup_timer"
 
     def _is_held(self, action):
-        pressed = pygame.key.get_pressed()
-        return any(pressed[k] for k in self.action_keys.get(action, []))
+        return self.app.input.is_action_held(action)
 
     def _draw_selector(self, screen, y, h, x=35, w=None):
         if w is None:

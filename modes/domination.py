@@ -3,7 +3,7 @@ import math
 import random
 import time
 from game_mode import GameMode
-from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT, BUTTON_MAP
+from settings import COLORS, SCREEN_WIDTH, SCREEN_HEIGHT
 from ui import draw_menu_item
 from widgets import draw_7seg_time, handle_custom_timer, draw_custom_timer
 from presets import timer_presets
@@ -49,9 +49,7 @@ class DominationMode(GameMode):
         self.anim_time = 0.0
         self.soldiers = self._init_soldiers()
         self.projectiles = []
-        self.action_keys = {}
-        for key, action in BUTTON_MAP.items():
-            self.action_keys.setdefault(action, []).append(key)
+
 
         if "goal_time" in config:
             self.goal_time = config["goal_time"]
@@ -61,8 +59,7 @@ class DominationMode(GameMode):
             self.phase = "setup"
 
     def _is_held(self, action):
-        pressed = pygame.key.get_pressed()
-        return any(pressed[k] for k in self.action_keys.get(action, []))
+        return self.app.input.is_action_held(action)
 
     def _init_soldiers(self):
         soldiers = []
